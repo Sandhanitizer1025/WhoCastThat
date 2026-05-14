@@ -10,6 +10,7 @@
   <Project Path="Unity.Multiplayer.Tools.NetStatsMonitor.Configuration.csproj" />
   <Project Path="Unity.ShaderGraph.Editor.csproj" />
   <Project Path="Unity.Services.Multiplayer.Multiplay.Authoring.Editor.csproj" />
+  <Project Path="Unity.ProBuilder.csproj" />
   <Project Path="Unity.Services.Multiplayer.csproj" />
   <Project Path="Unity.RenderPipelines.Core.Runtime.csproj" />
   <Project Path="Unity.Services.Vivox.csproj" />
@@ -21,6 +22,7 @@
   <Project Path="UnityEngine.UI.csproj" />
   <Project Path="Unity.Multiplayer.Tools.NetStatsMonitor.Editor.csproj" />
   <Project Path="Unity.RenderPipelines.Universal.2D.Runtime.csproj" />
+  <Project Path="Unity.ProBuilder.Poly2Tri.csproj" />
   <Project Path="Unity.XR.Simulation.csproj" />
   <Project Path="Unity.PerformanceTesting.Editor.csproj" />
   <Project Path="UnityEngine.TestRunner.csproj" />
@@ -31,6 +33,7 @@
   <Project Path="Unity.Multiplayer.PlayMode.Scenarios.Editor.csproj" />
   <Project Path="Unity.Multiplayer.Tools.NetworkProfiler.Editor.csproj" />
   <Project Path="Unity.Tutorials.Core.Editor.csproj" />
+  <Project Path="Unity.ProBuilder.Csg.csproj" />
   <Project Path="Unity.XR.Interaction.Toolkit.csproj" />
   <Project Path="Unity.XR.ARSubsystems.csproj" />
   <Project Path="Unity.Netcode.Runtime.csproj" />
@@ -47,6 +50,7 @@
   <Project Path="Unity.Searcher.Editor.csproj" />
   <Project Path="Unity.Multiplayer.Tools.MetricTypes.csproj" />
   <Project Path="Unity.XR.Hands.csproj" />
+  <Project Path="Unity.ProBuilder.Editor.csproj" />
   <Project Path="Unity.Multiplayer.Tools.Adapters.csproj" />
   <Project Path="Unity.Services.Wire.Internal.csproj" />
   <Project Path="UnityEditor.TestRunner.csproj" />
@@ -55,9 +59,9 @@
   <Project Path="Unity.XR.Interaction.Toolkit.Samples.InteractionSimulator.csproj" />
   <Project Path="Unity.Multiplayer.Playmode.VirtualProjects.Editor.csproj" />
   <Project Path="Unity.Services.Deployment.Core.csproj" />
+  <Project Path="unity-websocket-sharp.csproj" />
   <Project Path="Unity.TestTools.CodeCoverage.Editor.csproj" />
   <Project Path="Unity.Services.Core.Editor.csproj" />
-  <Project Path="unity-websocket-sharp.csproj" />
   <Project Path="Unity.Burst.CodeGen.csproj" />
   <Project Path="Unity.XR.AndroidOpenXR.csproj" />
   <Project Path="Unity.Services.Core.csproj" />
@@ -106,7 +110,9 @@
   <Project Path="Unity.Multiplayer.Center.Common.csproj" />
   <Project Path="Unity.XR.Interaction.Toolkit.Analytics.Editor.csproj" />
   <Project Path="Unity.Multiplayer.Tools.DependencyInjection.UIElements.csproj" />
+  <Project Path="Unity.ProBuilder.KdTree.csproj" />
   <Project Path="Unity.XR.Management.Editor.csproj" />
+  <Project Path="Unity.ProBuilder.AddOns.Editor.csproj" />
   <Project Path="Unity.Multiplayer.Tools.NetworkSimulator.Editor.csproj" />
   <Project Path="Unity.XR.OpenXR.Features.MetaQuestSupport.Editor.csproj" />
   <Project Path="Unity.Multiplayer.Tools.NetworkProfiler.Runtime.csproj" />
@@ -118,8 +124,8 @@
   <Project Path="Unity.Services.Core.Scheduler.csproj" />
   <Project Path="Unity.XR.Interaction.Toolkit.Analytics.Hooks.Editor.csproj" />
   <Project Path="Unity.Collections.CodeGen.csproj" />
-  <Project Path="Unity.Services.Core.Telemetry.csproj" />
   <Project Path="Unity.XR.Interaction.Toolkit.Samples.StarterAssets.csproj" />
+  <Project Path="Unity.Services.Core.Telemetry.csproj" />
   <Project Path="Unity.Services.Core.Components.csproj" />
   <Project Path="Unity.XR.Management.csproj" />
   <Project Path="Unity.Mathematics.Editor.csproj" />
@@ -130,6 +136,7 @@
   <Project Path="Unity.Multiplayer.PlayMode.Configurations.Editor.csproj" />
   <Project Path="Unity.Multiplayer.Tools.NetworkSolutionInterface.csproj" />
   <Project Path="Unity.Services.Core.Threading.csproj" />
+  <Project Path="Unity.ProBuilder.AssetIdRemapUtility.csproj" />
   <Project Path="Unity.Settings.Editor.csproj" />
   <Project Path="Unity.InputSystem.TestFramework.csproj" />
   <Project Path="Unity.Services.Multiplayer.Editor.csproj" />
@@ -170,6 +177,7 @@
   <Project Path="Unity.RenderPipelines.Universal.Shaders.csproj" />
   <Project Path="Unity.RenderPipelines.Core.Runtime.Shared.csproj" />
   <Project Path="Unity.Multiplayer.Tools.Adapters.Ngo1.csproj" />
+  <Project Path="Unity.ProBuilder.Stl.csproj" />
   <Project Path="Unity.XR.ARAnalytics.Editor.csproj" />
   <Project Path="Unity.Multiplayer.Tools.NetStatsReporting.csproj" />
   <Project Path="Unity.XR.Interaction.Toolkit.Samples.InteractionSimulator.Editor.csproj" />
