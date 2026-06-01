@@ -172,7 +172,6 @@
   <Project Path="Unity.XR.Interaction.Toolkit.Samples.StarterAssets.Editor.csproj" />
   <Project Path="Unity.Multiplayer.Tools.Editor.csproj" />
   <Project Path="Unity.Multiplayer.Tools.NetVis.Editor.Visualization.csproj" />
-  <Project Path="Assembly-CSharp.csproj" />
   <Project Path="Unity.Rendering.LightTransport.Editor.csproj" />
   <Project Path="Unity.Netcode.PackageChecker.Editor.csproj" />
   <Project Path="Unity.InputSystem.DocCodeSamples.csproj" />
