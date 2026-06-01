@@ -1,5 +1,6 @@
 {
   "dependencies": {
+    "com.unity.2d.sprite": "1.0.0",
     "com.unity.burst": "1.8.29",
     "com.unity.feature.development": "1.0.2",
     "com.unity.ide.rider": "3.0.39",
@@ -13,7 +14,7 @@
     "com.unity.probuilder": "6.0.9",
     "com.unity.render-pipelines.universal": "17.0.4",
     "com.unity.services.authentication": "3.6.1",
-    "com.unity.services.multiplayer": "1.2.0",
+    "com.unity.services.multiplayer": "2.2.2",
     "com.unity.services.vivox": "16.10.0",
     "com.unity.shadergraph": "17.0.4",
     "com.unity.xr.androidxr-openxr": "1.0.2",
