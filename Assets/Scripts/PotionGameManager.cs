@@ -13,25 +13,25 @@ public class PotionGameManager : MonoBehaviour
 
     [Header("VR Scene Setup")]
     public List<PotionPrefabMapping> potionPrefabs; 
-    public Transform[] rackSlots; // Array of 5 slots
+    public Transform[] rackSlots; 
     public TextMeshProUGUI uiText; 
 
     private List<PotionType> deck = new List<PotionType>();
-    
-    // Tracks exactly what GameObject is sitting in which slot index (0 to 4)
     private GameObject[] occupiedSlots; 
+
+    // STATE MACHINE TRIGGER: Tracks if the player is currently under a curse threat
+    private bool isCurseActive = false; 
 
     void Start()
     {
-        // Initialize our tracking array to match the number of physical slots
         occupiedSlots = new GameObject[rackSlots.Length];
-
         InitializeDeck();
         DealStartingHand();
     }
 
     void InitializeDeck()
     {
+        // 5x Hex, 4x Tribute, 4x Dispel, 5x Foresight, 4x Warp, 4x Phase, 4x Reflection, 6x Counterspell, 4x Curse
         for (int i = 0; i < 5; i++) deck.Add(PotionType.Hex);
         for (int i = 0; i < 4; i++) deck.Add(PotionType.Tribute);
         for (int i = 0; i < 4; i++) deck.Add(PotionType.Dispel);
@@ -58,7 +58,6 @@ public class PotionGameManager : MonoBehaviour
 
     void DealStartingHand()
     {
-        // Setup initial 5 cards into the tracking array
         SpawnPotionInRack(PotionType.Counterspell, 0);
 
         for (int i = 1; i < 5; i++)
@@ -91,14 +90,12 @@ public class PotionGameManager : MonoBehaviour
         GameObject prefabToSpawn = GetPrefabForType(type);
         if (prefabToSpawn == null) return;
 
-        // Spawn directly at the rack slot's transform coordinates
         GameObject newPotion = Instantiate(prefabToSpawn, rackSlots[slotIndex].position, rackSlots[slotIndex].rotation);
         
         Potion potionScript = newPotion.GetComponent<Potion>();
         if (potionScript == null) potionScript = newPotion.AddComponent<Potion>();
         potionScript.type = type; 
 
-        // Save this potion into our tracking system at the correct index
         occupiedSlots[slotIndex] = newPotion;
     }
 
@@ -111,56 +108,95 @@ public class PotionGameManager : MonoBehaviour
         return null;
     }
 
-    // This gets called by the PotDrawZone script when your hand enters the cauldron
     public void DrawPotionFromPot(Vector3 handPosition, Quaternion handRotation)
     {
+        // Block drawing a new card if you are currently handling an active curse!
+        if (isCurseActive)
+        {
+            uiText.text = "<color=#b02727>DEFEND YOURSELF!</color> You must play a Counterspell before drawing!";
+            return;
+        }
+
         if (deck.Count == 0)
         {
             uiText.text = "The cauldron is empty!";
             return;
         }
 
-        // 1. Find the first empty slot on the rack
         int targetSlotIndex = -1;
         for (int i = 0; i < occupiedSlots.Length; i++)
         {
-            if (occupiedSlots[i] == null) // Found an open space!
+            if (occupiedSlots[i] == null)
             {
                 targetSlotIndex = i;
                 break;
             }
         }
 
-        // 2. If no slots are null, the player's hand/rack is full
         if (targetSlotIndex == -1)
         {
-            uiText.text = "<color=red>Hand Full!</color> You cannot hold more than 5 potions.";
+            uiText.text = "<color=#b02727>Hand Full!</color> Cast something first.";
             return;
         }
 
-        // 3. Pull from deck and spawn it directly into that open slot
         PotionType drawnType = deck[0];
         deck.RemoveAt(0);
 
         SpawnPotionInRack(drawnType, targetSlotIndex);
 
-        // 4. Update UI
         if (drawnType == PotionType.Curse)
         {
-            uiText.text = "<color=purple>CRITICAL!</color> You drew a Curse directly to your rack! Counter it!";
+            uiText.text = "<color=#800080> CURSE DRAWN! </color>\nIt is on your rack! Place it in the playzone to confront it!";
         }
         else
         {
-            uiText.text = $"Drew a <color=yellow>{drawnType}</color>! Sent automatically to rack slot {targetSlotIndex + 1}.";
+            uiText.text = $"Drew a <color=#d1ce21>{drawnType}</color>.";
         }
     }
 
     public void PlayPotion(Potion potion)
     {
+        // Remove the potion from hand tracking immediately upon drop
+        ClearSlotTracking(potion.gameObject);
+
+        // ==========================================
+        // SCENARIO A: PLAYER IS CURRENTLY CURSED
+        // ==========================================
+        if (isCurseActive)
+        {
+            if (potion.type == PotionType.Counterspell)
+            {
+                // SUCCESS: Player saved themselves!
+                isCurseActive = false;
+                uiText.text = "<color=#63e0d8> COUNTERSPELL CAST! </color>\n\nCurse neutralized! It has been safely shuffled back into the cauldron.";
+                
+                // Put the curse back in the deck and shuffle (per Exploding Kittens rules)
+                deck.Add(PotionType.Curse);
+                ShuffleDeck();
+            }
+            else
+            {
+                // FAILURE: They threw the wrong potion in a panic!
+                uiText.text = $"<color=#b02727> BOOM! YOU EXPLODED! </color>\n\nYou tried to use {potion.type} instead of a Counterspell!";
+            }
+
+            Destroy(potion.gameObject, 0.2f);
+            return; 
+        }
+
+        // ==========================================
+        // SCENARIO B: NORMAL GAMEPLAY STATE
+        // ==========================================
         string message = "";
 
         switch (potion.type)
         {
+            case PotionType.Curse:
+                // Activating the threat sequence!
+                isCurseActive = true;
+                message = "<color=#800080> CURSE ACTIVATED! </color>\n\nQuick! Place a <color=#63e0d8>Counterspell</color> potion in the center to survive!";
+                break;
+
             case PotionType.Hex: message = "<color=#663300>Hex</color>: Must play 2 turns!"; break;
             case PotionType.Tribute: message = "<color=#d1ce21>Tribute</color>: Target must give you a card."; break;
             case PotionType.Dispel: message = "<color=#b02727>Dispel</color>: Stopped the last action!"; break;
@@ -169,22 +205,21 @@ public class PotionGameManager : MonoBehaviour
             case PotionType.Phase: message = "<color=#3b6b41>Phase</color>: Turn ended safely."; break;
             case PotionType.Reflection: message = "<color=#4d81bd>Reflection</color>: Copied the last cast spell!"; break;
             case PotionType.Counterspell: message = "<color=#63e0d8>Counterspell</color>: Saved from a curse!"; break;
-            case PotionType.Curse: message = "<color=#800080>Curse</color>: YOU EXPLODED!"; break;
         }
 
         uiText.text = message;
+        Destroy(potion.gameObject, 0.2f); 
+    }
 
-        // 1. Find which slot this potion came from and clear it out so it's marked empty
+    void ClearSlotTracking(GameObject potionObj)
+    {
         for (int i = 0; i < occupiedSlots.Length; i++)
         {
-            if (occupiedSlots[i] == potion.gameObject)
+            if (occupiedSlots[i] == potionObj)
             {
-                occupiedSlots[i] = null; // This slot is now open for a future draw!
+                occupiedSlots[i] = null;
                 break;
             }
         }
-
-        // 2. Destroy the physical bottle
-        Destroy(potion.gameObject, 0.2f); 
     }
 }

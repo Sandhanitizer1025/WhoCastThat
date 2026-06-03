@@ -1,0 +1,11 @@
+{
+            case PotionType.Hex: message = "<color=#663300>Hex</color>: Must play 2 turns!"; break;
+            case PotionType.Tribute: message = "<color=#d1ce21>Tribute</color>: Target must give you a card."; break;
+            case PotionType.Dispel: message = "<color=#b02727>Dispel</color>: Stopped the last action!"; break;
+            case PotionType.Foresight: message = "<color=#ff36dd>Foresight</color>: Viewing top 3 potions secretly..."; break;
+            case PotionType.Warp: message = "<color=#3d3d3d>Warp</color>: Shuffled the cauldron!"; ShuffleDeck(); break;
+            case PotionType.Phase: message = "<color=#3b6b41>Phase</color>: Turn ended safely."; break;
+            case PotionType.Reflection: message = "<color=#4d81bd>Reflection</color>: Copied the last cast spell!"; break;
+            case PotionType.Counterspell: message = "<color=#63e0d8>Counterspell</color>: Saved from a curse!"; break;
+            case PotionType.Curse: message = "<color=#800080>Curse</color>: YOU EXPLODED!"; break;
+        }
