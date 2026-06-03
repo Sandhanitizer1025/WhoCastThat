@@ -4,7 +4,6 @@ using TMPro;
 
 public class PotionGameManager : MonoBehaviour
 {
-    // A simple structural mapping to pair enums with their respective unique prefabs
     [System.Serializable]
     public struct PotionPrefabMapping
     {
@@ -13,15 +12,20 @@ public class PotionGameManager : MonoBehaviour
     }
 
     [Header("VR Scene Setup")]
-    public List<PotionPrefabMapping> potionPrefabs; // Assign all 9 unique prefabs here!
-    public Transform[] rackSlots; 
+    public List<PotionPrefabMapping> potionPrefabs; 
+    public Transform[] rackSlots; // Array of 5 slots
     public TextMeshProUGUI uiText; 
 
     private List<PotionType> deck = new List<PotionType>();
-    private List<GameObject> activeHand = new List<GameObject>();
+    
+    // Tracks exactly what GameObject is sitting in which slot index (0 to 4)
+    private GameObject[] occupiedSlots; 
 
     void Start()
     {
+        // Initialize our tracking array to match the number of physical slots
+        occupiedSlots = new GameObject[rackSlots.Length];
+
         InitializeDeck();
         DealStartingHand();
     }
@@ -54,6 +58,7 @@ public class PotionGameManager : MonoBehaviour
 
     void DealStartingHand()
     {
+        // Setup initial 5 cards into the tracking array
         SpawnPotionInRack(PotionType.Counterspell, 0);
 
         for (int i = 1; i < 5; i++)
@@ -81,42 +86,73 @@ public class PotionGameManager : MonoBehaviour
 
     void SpawnPotionInRack(PotionType type, int slotIndex)
     {
-        Debug.Log($"[DEBUG] Attempting to spawn {type} at slot {slotIndex}");
         if (slotIndex >= rackSlots.Length) return;
 
-        // Find the correct unique prefab for this potion type
         GameObject prefabToSpawn = GetPrefabForType(type);
-        
-        if (prefabToSpawn == null)
-        {
-            Debug.LogError($"Missing prefab mapping for Potion Type: {type}");
-            return;
-        }
+        if (prefabToSpawn == null) return;
 
+        // Spawn directly at the rack slot's transform coordinates
         GameObject newPotion = Instantiate(prefabToSpawn, rackSlots[slotIndex].position, rackSlots[slotIndex].rotation);
         
-        // Safety check: Ensure the prefab has the Potion component attached
         Potion potionScript = newPotion.GetComponent<Potion>();
-        if (potionScript == null)
-        {
-            potionScript = newPotion.AddComponent<Potion>();
-        }
+        if (potionScript == null) potionScript = newPotion.AddComponent<Potion>();
         potionScript.type = type; 
 
-        activeHand.Add(newPotion);
+        // Save this potion into our tracking system at the correct index
+        occupiedSlots[slotIndex] = newPotion;
     }
 
-    // Helper method to look up the correct prefab from your list
     GameObject GetPrefabForType(PotionType type)
     {
         foreach (var mapping in potionPrefabs)
         {
-            if (mapping.type == type)
-            {
-                return mapping.prefab;
-            }
+            if (mapping.type == type) return mapping.prefab;
         }
         return null;
+    }
+
+    // This gets called by the PotDrawZone script when your hand enters the cauldron
+    public void DrawPotionFromPot(Vector3 handPosition, Quaternion handRotation)
+    {
+        if (deck.Count == 0)
+        {
+            uiText.text = "The cauldron is empty!";
+            return;
+        }
+
+        // 1. Find the first empty slot on the rack
+        int targetSlotIndex = -1;
+        for (int i = 0; i < occupiedSlots.Length; i++)
+        {
+            if (occupiedSlots[i] == null) // Found an open space!
+            {
+                targetSlotIndex = i;
+                break;
+            }
+        }
+
+        // 2. If no slots are null, the player's hand/rack is full
+        if (targetSlotIndex == -1)
+        {
+            uiText.text = "<color=red>Hand Full!</color> You cannot hold more than 5 potions.";
+            return;
+        }
+
+        // 3. Pull from deck and spawn it directly into that open slot
+        PotionType drawnType = deck[0];
+        deck.RemoveAt(0);
+
+        SpawnPotionInRack(drawnType, targetSlotIndex);
+
+        // 4. Update UI
+        if (drawnType == PotionType.Curse)
+        {
+            uiText.text = "<color=purple>CRITICAL!</color> You drew a Curse directly to your rack! Counter it!";
+        }
+        else
+        {
+            uiText.text = $"Drew a <color=yellow>{drawnType}</color>! Sent automatically to rack slot {targetSlotIndex + 1}.";
+        }
     }
 
     public void PlayPotion(Potion potion)
@@ -137,50 +173,18 @@ public class PotionGameManager : MonoBehaviour
         }
 
         uiText.text = message;
-        activeHand.Remove(potion.gameObject);
+
+        // 1. Find which slot this potion came from and clear it out so it's marked empty
+        for (int i = 0; i < occupiedSlots.Length; i++)
+        {
+            if (occupiedSlots[i] == potion.gameObject)
+            {
+                occupiedSlots[i] = null; // This slot is now open for a future draw!
+                break;
+            }
+        }
+
+        // 2. Destroy the physical bottle
         Destroy(potion.gameObject, 0.2f); 
     }
-
-    public void DrawPotionFromPot(Vector3 spawnPosition, Quaternion spawnRotation)
-    {
-    // 1. Safety check: Is the deck empty?
-    if (deck.Count == 0)
-    {
-        uiText.text = "The cauldron is empty! No more potions left.";
-        return;
-    }
-
-    // 2. Pull the top card (since it's already shuffled, this is completely random!)
-    PotionType drawnType = deck[0];
-    deck.RemoveAt(0); // Remove it so it can't be drawn again
-
-    // 3. Find the correct prefab for this potion type
-    GameObject prefabToSpawn = GetPrefabForType(drawnType);
-    if (prefabToSpawn == null)
-    {
-        Debug.LogError($"Missing prefab mapping for drawn type: {drawnType}");
-        return;
-    }
-
-    // 4. Spawn it directly at the player's hand controller position
-    GameObject newPotion = Instantiate(prefabToSpawn, spawnPosition, spawnRotation);
-    
-    // Ensure the Potion script component is set up right
-    Potion potionScript = newPotion.GetComponent<Potion>();
-    if (potionScript == null) potionScript = newPotion.AddComponent<Potion>();
-    potionScript.type = drawnType;
-
-    // 5. Update the UI to show they took their turn and what they got
-    string turnMessage = "";
-    if (drawnType == PotionType.Curse)
-    {
-        turnMessage = "<color=purple>CRITICAL!</color> You drew a Curse! Quickly cast a Counterspell or explode!";
-    }
-    else
-    {
-        turnMessage = $"You drew a <color=yellow>{drawnType}</color>! Your turn ends.";
-    }
-    
-    uiText.text = turnMessage;
-}
 }
