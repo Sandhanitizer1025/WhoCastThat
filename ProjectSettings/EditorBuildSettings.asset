@@ -30,6 +30,4 @@ EditorBuildSettings:
       type: 2}
     com.unity.xr.openxr.settings4: {fileID: 11400000, guid: 87b413c5a910b15498a98200731b1754,
       type: 2}
-    xr.sdk.mock-hmd.settings: {fileID: 11400000, guid: 0bd48656ed03b65489a08a0f35115729,
-      type: 2}
   m_UseUCBPForAssetBundles: 0
