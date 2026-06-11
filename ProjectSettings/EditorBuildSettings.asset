@@ -5,13 +5,16 @@ EditorBuildSettings:
   m_ObjectHideFlags: 0
   serializedVersion: 2
   m_Scenes:
+  - enabled: 0
+    path: Assets/Scenes/YKScene.unity
+    guid: f0a8fb6747245da4b9bb5e652a018690
   - enabled: 1
     path: Assets/Scenes/SampleScene.unity
     guid: 13f6f87036926f94ab0417ca1b31725c
   - enabled: 0
     path: Assets/Scenes/BasicScene.unity
     guid: bc761d9a86b33554f85fd11bb1f87ba3
-  - enabled: 1
+  - enabled: 0
     path: Assets/Scenes/RaphaelScene1.unity
     guid: f9c26f4c4fd74e945a29ac81ae6633dd
   m_configObjects:
@@ -20,5 +23,7 @@ EditorBuildSettings:
     com.unity.xr.management.loader_settings: {fileID: 11400000, guid: e3aee76b9372917449aef639e2f74814,
       type: 2}
     com.unity.xr.openxr.settings4: {fileID: 11400000, guid: 87b413c5a910b15498a98200731b1754,
+      type: 2}
+    xr.sdk.mock-hmd.settings: {fileID: 11400000, guid: 0bd48656ed03b65489a08a0f35115729,
       type: 2}
   m_UseUCBPForAssetBundles: 0
