@@ -1,3 +1,4 @@
+using System.Collections;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -71,6 +72,34 @@ public class BootAudioManager : MonoBehaviour
 
         PlayerPrefs.SetFloat(UISfxVolumeKey, volume);
         PlayerPrefs.Save();
+    }
+
+    // Fades the music volume to silence over the given duration for scene transitions.
+    // Does NOT persist to PlayerPrefs, so the player's saved music volume is preserved.
+    public void FadeOutMusic(float duration)
+    {
+        if (musicSource == null)
+        {
+            return;
+        }
+
+        StartCoroutine(FadeOutMusicRoutine(duration));
+    }
+
+    private IEnumerator FadeOutMusicRoutine(float duration)
+    {
+        float startVolume = musicSource.volume;
+        float elapsed = 0f;
+        float fadeTime = Mathf.Max(0.01f, duration);
+
+        while (elapsed < fadeTime)
+        {
+            elapsed += Time.deltaTime;
+            musicSource.volume = Mathf.Lerp(startVolume, 0f, elapsed / fadeTime);
+            yield return null;
+        }
+
+        musicSource.volume = 0f;
     }
 
     public void PlayHoverSound()

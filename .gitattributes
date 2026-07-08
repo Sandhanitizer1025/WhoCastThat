@@ -147,6 +147,7 @@ Packages/packages-lock.json linguist-generated
 *.dll                   lfs
 *.pdb                   lfs
 *.so                    lfs
+*.bundle                lfs
 
 # Fonts
 *.otf                   lfs

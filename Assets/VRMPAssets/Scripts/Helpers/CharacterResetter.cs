@@ -57,6 +57,13 @@ namespace XRMultiplayer
 
         void ResetPlayer(Vector3 destination)
         {
+            // Scenes without locomotion (e.g. the boot menu) have no TeleportationProvider,
+            // so there's nothing to reset against.
+            if (m_TeleportationProvider == null)
+            {
+                return;
+            }
+
             TeleportRequest teleportRequest = new()
             {
                 destinationPosition = destination,
