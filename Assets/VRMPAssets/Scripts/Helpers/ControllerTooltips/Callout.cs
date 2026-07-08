@@ -72,7 +72,10 @@ namespace Unity.VRTemplate
                 StopCoroutine(m_StartCo);
             if (m_EndCo != null)
                 StopCoroutine(m_EndCo);
-            m_StartCo = StartCoroutine(StartDelay());
+
+            // Coroutines can't run on an inactive object; an inactive callout has nothing to show.
+            if (isActiveAndEnabled)
+                m_StartCo = StartCoroutine(StartDelay());
         }
 
         public void GazeHoverEnd()
@@ -84,7 +87,12 @@ namespace Unity.VRTemplate
             }
 
             m_Gazing = false;
-            m_EndCo = StartCoroutine(EndDelay());
+
+            // If inactive we can't start the coroutine, so just turn the tooltip off directly.
+            if (isActiveAndEnabled)
+                m_EndCo = StartCoroutine(EndDelay());
+            else
+                TurnOffStuff();
         }
 
         IEnumerator StartDelay()

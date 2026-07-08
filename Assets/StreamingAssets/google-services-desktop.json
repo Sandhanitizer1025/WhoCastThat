@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "459216949302",
+    "project_id": "whocastthat",
+    "storage_bucket": "whocastthat.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:459216949302:android:52ec99d5c2123a689fc897",
+        "android_client_info": {
+          "package_name": "com.CRZYLabs.WhoCastThat"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAbu7rOqddNJj-t0bVPafde3Q5bnpHQ-eY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
