@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using Unity.Collections;
 using Unity.Netcode;
@@ -37,6 +38,16 @@ namespace WhoCastThat.Interactions
         [Tooltip("One rack (testtube stand) per seat, in seat order. Drawn potions fill its 'Slot' children in order.")]
         [SerializeField] private Transform[] seatRacks;
 
+        [Header("Cauldron brew")]
+        [Tooltip("The floating cauldron rig; drawn potions spawn here and float out to the rack.")]
+        [SerializeField] private Transform cauldronRig;
+
+        [Tooltip("Seconds the ladle stirs after the player dips a hand, before the potion floats out.")]
+        [SerializeField] private float stirDurationSeconds = 2.5f;
+
+        [Tooltip("Seconds for a drawn potion to float from the pot into the rack slot.")]
+        [SerializeField] private float potionFloatSeconds = 2f;
+
         // Next slot index to fill for each seat, so potions land in tidy tube slots.
         private readonly Dictionary<int, int> nextSlotBySeat = new Dictionary<int, int>();
 
@@ -60,6 +71,14 @@ namespace WhoCastThat.Interactions
         private readonly NetworkVariable<FixedString512Bytes> announcement = new(
             "", NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Owner);
 
+        // True while the cauldron is stirring/brewing (drives the ladle animation everywhere
+        // and blocks a second dip until the potion has floated out).
+        private readonly NetworkVariable<bool> stirring = new(
+            false, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Owner);
+
+        // Authority-only guard so overlapping dips can't start two brews at once.
+        private bool brewing;
+
         // ---- Client-facing events (UI subscribes to these) ----
         public static event Action<string> AnnouncementChanged;
         public static event Action<ulong> TurnChanged;
@@ -74,6 +93,16 @@ namespace WhoCastThat.Interactions
 
         public bool IsLocalPlayersTurn =>
             NetworkManager != null && CurrentTurnClientId == NetworkManager.LocalClientId;
+
+        /// <summary>Seat (turn-order) index whose turn it is, or -1 before the game starts.</summary>
+        public int CurrentSeatIndex =>
+            (gameActive.Value && turnOrder.Count > 0) ? currentTurnIndex.Value : -1;
+
+        /// <summary>True while the cauldron is stirring (drives the ladle animation everywhere).</summary>
+        public bool IsStirring => stirring.Value;
+
+        /// <summary>Whether a fresh dip can start a brew right now (no brew already in progress).</summary>
+        public bool CanBrew => gameActive.Value && !stirring.Value;
 
         /// <summary>0-based seat (turn-order) index for a client, or -1 if not yet known.</summary>
         public int GetSeatIndex(ulong clientId)
@@ -151,6 +180,8 @@ namespace WhoCastThat.Interactions
 
             currentTurnIndex.Value = 0;
             pendingExtraTurns.Value = 0;
+            stirring.Value = false;
+            brewing = false;
             cursedPlayers.Clear();
             gameActive.Value = turnOrder.Count >= minPlayersToStart;
 
@@ -272,7 +303,10 @@ namespace WhoCastThat.Interactions
 
         // ===================== Draw (client -> authority) =====================
 
-        /// <summary>Call from the local player (e.g. hand enters the cauldron).</summary>
+        /// <summary>
+        /// Instant draw with no brewing (used by the keyboard test harness). The normal
+        /// in-world path is to dip a hand in the cauldron via <see cref="RequestBrew"/>.
+        /// </summary>
         public void RequestDraw()
         {
             RequestDrawRpc(NetworkManager.LocalClientId);
@@ -281,25 +315,82 @@ namespace WhoCastThat.Interactions
         [Rpc(SendTo.Authority)]
         private void RequestDrawRpc(ulong playerId)
         {
-            if (!HasAuthority || !gameActive.Value)
+            if (brewing || !CanPlayerDraw(playerId))
             {
                 return;
             }
+            PerformDraw(playerId, false);
+        }
+
+        // ===================== Brew (client -> authority) =====================
+
+        /// <summary>
+        /// Called when the local player dips a hand in the cauldron. The authority
+        /// stirs the ladle for a moment, then a potion floats out to the rack.
+        /// </summary>
+        public void RequestBrew()
+        {
+            RequestBrewRpc(NetworkManager.LocalClientId);
+        }
+
+        [Rpc(SendTo.Authority)]
+        private void RequestBrewRpc(ulong playerId)
+        {
+            if (brewing || !CanPlayerDraw(playerId))
+            {
+                return; // already brewing, or not a legal draw right now
+            }
+
+            brewing = true;
+            stirring.Value = true; // drives the ladle animation on every client
+            SetAnnouncement($"{PlayerLabel(playerId)} stirs the cauldron...");
+            StartCoroutine(BrewRoutine(playerId));
+        }
+
+        // Authority-only: stir for a beat, then draw the potion (which floats out).
+        private IEnumerator BrewRoutine(ulong playerId)
+        {
+            yield return new WaitForSeconds(Mathf.Max(0.1f, stirDurationSeconds));
+
+            stirring.Value = false;
+            brewing = false;
+
+            // The player may have left or been interrupted (e.g. cursed) mid-brew.
+            if (!CanPlayerDraw(playerId))
+            {
+                yield break;
+            }
+            PerformDraw(playerId, true);
+        }
+
+        // Shared draw preconditions for both the instant and brew-driven paths.
+        private bool CanPlayerDraw(ulong playerId)
+        {
+            if (!HasAuthority || !gameActive.Value)
+            {
+                return false;
+            }
             if (CurrentTurnClientId != playerId)
             {
-                return; // not this player's turn
+                return false; // not this player's turn
             }
             if (cursedPlayers.Contains(playerId))
             {
                 SetAnnouncement($"{PlayerLabel(playerId)} must play a Counterspell before drawing!");
-                return;
+                return false;
             }
             if (deck.Count == 0)
             {
                 SetAnnouncement("The cauldron is empty!");
-                return;
+                return false;
             }
+            return true;
+        }
 
+        // Authority-only: take the top card and resolve it. When floatFromPot is true
+        // the potion spawns at the cauldron and animates into the rack for everyone.
+        private void PerformDraw(ulong playerId, bool floatFromPot)
+        {
             PotionType drawn = deck[0];
             deck.RemoveAt(0);
 
@@ -311,7 +402,7 @@ namespace WhoCastThat.Interactions
             }
             else
             {
-                SpawnPotionForPlayer(drawn, playerId);
+                SpawnPotionForPlayer(drawn, playerId, floatFromPot);
                 SetAnnouncement($"{PlayerLabel(playerId)} drew a potion.");
                 AdvanceTurn();
             }
@@ -320,7 +411,7 @@ namespace WhoCastThat.Interactions
         // Authority-only: spawn a networked potion of the given type in front of the
         // player's seat. It is grabbable; grabbing transfers ownership via the
         // NetworkPhysicsInteractable on the prefab.
-        private void SpawnPotionForPlayer(PotionType type, ulong playerId)
+        private void SpawnPotionForPlayer(PotionType type, ulong playerId, bool floatFromPot)
         {
             if (networkedPotionPrefab == null)
             {
@@ -331,25 +422,30 @@ namespace WhoCastThat.Interactions
             int seat = GetSeatIndex(playerId);
             Transform rack = (seatRacks != null && seat >= 0 && seat < seatRacks.Length) ? seatRacks[seat] : null;
 
-            Vector3 spawnPos;
-            Quaternion spawnRot = Quaternion.identity;
+            // Resting pose in the rack slot (where the potion ends up).
+            Vector3 restPos;
+            Quaternion restRot = Quaternion.identity;
 
             Transform slot = GetNextRackSlot(seat, rack);
             if (slot != null)
             {
-                spawnPos = slot.position + Vector3.up * 0.04f;
-                spawnRot = slot.rotation;
+                restPos = slot.position + Vector3.up * 0.04f;
+                restRot = slot.rotation;
             }
             else if (rack != null)
             {
-                spawnPos = rack.position + Vector3.up * 0.1f;
+                restPos = rack.position + Vector3.up * 0.1f;
             }
             else
             {
-                spawnPos = transform.position;
+                restPos = transform.position;
             }
 
-            GameObject potionObject = Instantiate(networkedPotionPrefab, spawnPos, spawnRot);
+            // Spawn at the cauldron if floating out, otherwise straight into the slot.
+            bool canFloat = floatFromPot && cauldronRig != null;
+            Vector3 spawnPos = canFloat ? cauldronRig.position + Vector3.up * 0.12f : restPos;
+
+            GameObject potionObject = Instantiate(networkedPotionPrefab, spawnPos, restRot);
             NetworkObject netObj = potionObject.GetComponent<NetworkObject>();
             netObj.Spawn();
 
@@ -357,6 +453,52 @@ namespace WhoCastThat.Interactions
             if (potion != null)
             {
                 potion.SetType(type);
+            }
+
+            if (canFloat)
+            {
+                // Authority owns the fresh potion; ClientNetworkTransform replicates
+                // this owner-driven motion so every client sees it float to the rack.
+                Rigidbody body = potionObject.GetComponent<Rigidbody>();
+                StartCoroutine(FloatPotionToRack(potionObject.transform, body, spawnPos, restPos));
+            }
+        }
+
+        private IEnumerator FloatPotionToRack(Transform potion, Rigidbody body, Vector3 from, Vector3 to)
+        {
+            // Make it kinematic for the trip so physics doesn't fight our per-frame
+            // position writes (otherwise it snaps instead of floating).
+            bool wasKinematic = body != null && body.isKinematic;
+            if (body != null)
+            {
+                body.isKinematic = true;
+            }
+
+            float elapsed = 0f;
+            float duration = Mathf.Max(0.05f, potionFloatSeconds);
+            while (potion != null && elapsed < duration)
+            {
+                elapsed += Time.deltaTime;
+                float u = Mathf.Clamp01(elapsed / duration);
+                float eased = u * u * (3f - 2f * u); // smoothstep
+                Vector3 pos = Vector3.Lerp(from, to, eased);
+                pos.y += Mathf.Sin(u * Mathf.PI) * 0.08f; // gentle arc lift
+                potion.position = pos;
+                if (body != null)
+                {
+                    body.position = pos; // keep the rigidbody in step so the sync is clean
+                }
+                yield return null;
+            }
+
+            if (potion != null)
+            {
+                potion.position = to;
+            }
+            if (body != null)
+            {
+                body.position = to;
+                body.isKinematic = wasKinematic; // restore so it can be grabbed normally
             }
         }
 
@@ -532,6 +674,10 @@ namespace WhoCastThat.Interactions
                 pendingExtraTurns.Value -= 1;
             }
 
+            // Fresh cauldron for the next player.
+            stirring.Value = false;
+            brewing = false;
+
             currentTurnIndex.Value = (currentTurnIndex.Value + 1) % turnOrder.Count;
             AnnounceCurrentTurn();
         }
@@ -593,7 +739,7 @@ namespace WhoCastThat.Interactions
             {
                 return;
             }
-            SetAnnouncement($"{PlayerLabel(CurrentTurnClientId)}'s turn.");
+            SetAnnouncement($"{PlayerLabel(CurrentTurnClientId)}'s turn — dip your hand in the cauldron.");
         }
 
         private void SetAnnouncement(string text)
