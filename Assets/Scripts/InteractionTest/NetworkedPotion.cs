@@ -17,8 +17,13 @@ namespace WhoCastThat.Interactions
     [RequireComponent(typeof(NetworkObject))]
     public class NetworkedPotion : NetworkBehaviour
     {
-        [Tooltip("Optional placeholder renderer tinted by potion type until real art is dropped in.")]
+        [Tooltip("The liquid renderer (fake-liquid shader) tinted per potion type via _SideColour/_TopColour.")]
         [SerializeField] private Renderer tintRenderer;
+
+        // Fake-liquid shadergraph colour properties.
+        private static readonly int SideColourId = Shader.PropertyToID("_SideColour");
+        private static readonly int TopColourId = Shader.PropertyToID("_TopColour");
+        private MaterialPropertyBlock tintBlock;
 
         // Owner-write so the authority can set the type when it spawns the potion.
         private readonly NetworkVariable<int> networkedType = new(
@@ -62,7 +67,13 @@ namespace WhoCastThat.Interactions
             name = $"Potion ({Type})";
             if (tintRenderer != null)
             {
-                tintRenderer.material.color = ColorFor(Type);
+                Color c = ColorFor(Type);
+                Color side = new Color(c.r * 0.75f, c.g * 0.75f, c.b * 0.75f, 1f);
+                tintBlock ??= new MaterialPropertyBlock();
+                tintRenderer.GetPropertyBlock(tintBlock);
+                tintBlock.SetColor(SideColourId, side);
+                tintBlock.SetColor(TopColourId, c);
+                tintRenderer.SetPropertyBlock(tintBlock);
             }
             TypeApplied?.Invoke(Type);
         }
