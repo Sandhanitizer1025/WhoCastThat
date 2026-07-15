@@ -30,6 +30,16 @@ namespace WhoCastThat.Interactions
         [Tooltip("Players required before the match starts (and below which it ends).")]
         [SerializeField] private int minPlayersToStart = 2;
 
+        [Header("Networked potions")]
+        [Tooltip("Potion prefab (NetworkObject + NetworkedPotion). Must be registered with the Network Manager.")]
+        [SerializeField] private GameObject networkedPotionPrefab;
+
+        [Tooltip("One rack (testtube stand) per seat, in seat order. Drawn potions fill its 'Slot' children in order.")]
+        [SerializeField] private Transform[] seatRacks;
+
+        // Next slot index to fill for each seat, so potions land in tidy tube slots.
+        private readonly Dictionary<int, int> nextSlotBySeat = new Dictionary<int, int>();
+
         // ---- Replicated state (authority writes, everyone reads) ----
 
         // Turn order by client id; currentTurnIndex indexes into this.
@@ -293,26 +303,101 @@ namespace WhoCastThat.Interactions
             PotionType drawn = deck[0];
             deck.RemoveAt(0);
 
-            // TODO(scene wiring): spawn a networked potion of `drawn` owned by playerId
-            // into that player's rack. For now the draw outcome resolves directly.
             if (drawn == PotionType.Curse)
             {
+                // The curse is an immediate threat and is not added to the hand.
                 cursedPlayers.Add(playerId);
                 SetAnnouncement($"{PlayerLabel(playerId)} drew a CURSE! Play a Counterspell to survive.");
             }
             else
             {
-                SetAnnouncement($"{PlayerLabel(playerId)} drew a card.");
+                SpawnPotionForPlayer(drawn, playerId);
+                SetAnnouncement($"{PlayerLabel(playerId)} drew a potion.");
                 AdvanceTurn();
             }
         }
 
+        // Authority-only: spawn a networked potion of the given type in front of the
+        // player's seat. It is grabbable; grabbing transfers ownership via the
+        // NetworkPhysicsInteractable on the prefab.
+        private void SpawnPotionForPlayer(PotionType type, ulong playerId)
+        {
+            if (networkedPotionPrefab == null)
+            {
+                Debug.LogWarning("[NetworkedSpellGame] No networked potion prefab assigned.", this);
+                return;
+            }
+
+            int seat = GetSeatIndex(playerId);
+            Transform rack = (seatRacks != null && seat >= 0 && seat < seatRacks.Length) ? seatRacks[seat] : null;
+
+            Vector3 spawnPos;
+            Quaternion spawnRot = Quaternion.identity;
+
+            Transform slot = GetNextRackSlot(seat, rack);
+            if (slot != null)
+            {
+                spawnPos = slot.position + Vector3.up * 0.04f;
+                spawnRot = slot.rotation;
+            }
+            else if (rack != null)
+            {
+                spawnPos = rack.position + Vector3.up * 0.1f;
+            }
+            else
+            {
+                spawnPos = transform.position;
+            }
+
+            GameObject potionObject = Instantiate(networkedPotionPrefab, spawnPos, spawnRot);
+            NetworkObject netObj = potionObject.GetComponent<NetworkObject>();
+            netObj.Spawn();
+
+            NetworkedPotion potion = potionObject.GetComponent<NetworkedPotion>();
+            if (potion != null)
+            {
+                potion.SetType(type);
+            }
+        }
+
+        // Rotate through a rack's "Slot" children so drawn potions fill tidy tube slots.
+        private Transform GetNextRackSlot(int seat, Transform rack)
+        {
+            if (rack == null)
+            {
+                return null;
+            }
+
+            var slots = new List<Transform>();
+            foreach (Transform child in rack)
+            {
+                if (child.name.StartsWith("Slot"))
+                {
+                    slots.Add(child);
+                }
+            }
+            if (slots.Count == 0)
+            {
+                return null;
+            }
+
+            int index = nextSlotBySeat.TryGetValue(seat, out int n) ? n : 0;
+            nextSlotBySeat[seat] = index + 1;
+            return slots[index % slots.Count];
+        }
+
         // ===================== Cast (client -> authority) =====================
 
-        /// <summary>Call from the local player when a potion is placed in the play zone.</summary>
+        /// <summary>Cast at an explicit target (used by the keyboard test harness).</summary>
         public void RequestCast(PotionType type, ulong targetId)
         {
             RequestCastRpc(type, NetworkManager.LocalClientId, targetId);
+        }
+
+        /// <summary>Cast targeting the next player automatically (used by the play zone).</summary>
+        public void RequestCast(PotionType type)
+        {
+            RequestCastRpc(type, NetworkManager.LocalClientId, ulong.MaxValue);
         }
 
         /// <summary>
@@ -352,6 +437,12 @@ namespace WhoCastThat.Interactions
             if (!HasAuthority || !gameActive.Value)
             {
                 return;
+            }
+
+            // ulong.MaxValue means "target the next player" (used by the play zone).
+            if (targetId == ulong.MaxValue)
+            {
+                targetId = NextPlayerId(casterId);
             }
 
             // Curse defence takes priority even if it interrupts turn order.
@@ -510,9 +601,16 @@ namespace WhoCastThat.Interactions
             announcement.Value = new FixedString512Bytes(text);
         }
 
-        // Placeholder label until wired to XRINetworkPlayer names/colours.
+        // Resolve a player's display name from their networked profile, falling back
+        // to a generic label before the name has replicated.
         private string PlayerLabel(ulong id)
         {
+            if (XRMultiplayer.XRINetworkGameManager.Instance != null &&
+                XRMultiplayer.XRINetworkGameManager.Instance.TryGetPlayerByID(id, out XRMultiplayer.XRINetworkPlayer player) &&
+                player != null && !string.IsNullOrEmpty(player.playerName))
+            {
+                return player.playerName;
+            }
             return $"Player {id}";
         }
     }
