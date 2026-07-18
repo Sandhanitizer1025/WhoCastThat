@@ -1,6 +1,6 @@
 %YAML 1.1
 %TAG !u! tag:unity3d.com,2011:
---- !u!114 &-5539208752902807790
+--- !u!114 &-220004673729505234
 MonoBehaviour:
   m_ObjectHideFlags: 11
   m_CorrespondingSourceObject: {fileID: 0}
@@ -20,7 +20,7 @@ Material:
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_Name: orb_light_orb_BaseColor.1001
+  m_Name: orb_light_orb_stand1_BaseColor.1001
   m_Shader: {fileID: 4800000, guid: 933532a4fcc9baf4fa0491de14d08ed7, type: 3}
   m_Parent: {fileID: 0}
   m_ModifiedSerializedProperties: 0
@@ -31,7 +31,7 @@ Material:
   - _OCCLUSIONMAP
   - _PARALLAXMAP
   m_InvalidKeywords: []
-  m_LightmapFlags: 2
+  m_LightmapFlags: 6
   m_EnableInstancingVariants: 0
   m_DoubleSidedGI: 0
   m_CustomRenderQueue: -1
@@ -44,11 +44,11 @@ Material:
     serializedVersion: 3
     m_TexEnvs:
     - _BaseMap:
-        m_Texture: {fileID: 2800000, guid: 1fce966d8357ee5448567a52633502b7, type: 3}
+        m_Texture: {fileID: 2800000, guid: ab212cd6a0a73a7409aa2a4204ba54a3, type: 3}
         m_Scale: {x: 1, y: 1}
         m_Offset: {x: 0, y: 0}
     - _BumpMap:
-        m_Texture: {fileID: 2800000, guid: 1accd3238507dce41b67eef5cefd6471, type: 3}
+        m_Texture: {fileID: 2800000, guid: 99bf461ed3ae1f64e90615bf14d2ebfb, type: 3}
         m_Scale: {x: 1, y: 1}
         m_Offset: {x: 0, y: 0}
     - _DetailAlbedoMap:
@@ -64,23 +64,23 @@ Material:
         m_Scale: {x: 1, y: 1}
         m_Offset: {x: 0, y: 0}
     - _EmissionMap:
-        m_Texture: {fileID: 2800000, guid: 9816c770b28cea546a3913bd4640cc7b, type: 3}
+        m_Texture: {fileID: 2800000, guid: 38c2b4fc69bb7d349968ca45bfbf4be6, type: 3}
         m_Scale: {x: 1, y: 1}
         m_Offset: {x: 0, y: 0}
     - _MainTex:
-        m_Texture: {fileID: 2800000, guid: 1fce966d8357ee5448567a52633502b7, type: 3}
+        m_Texture: {fileID: 2800000, guid: ab212cd6a0a73a7409aa2a4204ba54a3, type: 3}
         m_Scale: {x: 1, y: 1}
         m_Offset: {x: 0, y: 0}
     - _MetallicGlossMap:
-        m_Texture: {fileID: 2800000, guid: db04bc0d561299140a6bbd872e962eb6, type: 3}
+        m_Texture: {fileID: 2800000, guid: 3fe22c9ec87044a43befe3dfb59f0a42, type: 3}
         m_Scale: {x: 1, y: 1}
         m_Offset: {x: 0, y: 0}
     - _OcclusionMap:
-        m_Texture: {fileID: 2800000, guid: 04be63341f937e041b48fb8235881d5d, type: 3}
+        m_Texture: {fileID: 2800000, guid: ec97b42b1e5e91a4e924f1ce974efe21, type: 3}
         m_Scale: {x: 1, y: 1}
         m_Offset: {x: 0, y: 0}
     - _ParallaxMap:
-        m_Texture: {fileID: 2800000, guid: f033ac926a6dd5e4a86f2ce71cda95f1, type: 3}
+        m_Texture: {fileID: 2800000, guid: a48b41d54c748f94590dcff06fea9da5, type: 3}
         m_Scale: {x: 1, y: 1}
         m_Offset: {x: 0, y: 0}
     - _SpecGlossMap:
@@ -135,7 +135,7 @@ Material:
     m_Colors:
     - _BaseColor: {r: 1, g: 1, b: 1, a: 1}
     - _Color: {r: 1, g: 1, b: 1, a: 1}
-    - _EmissionColor: {r: 0.80845904, g: 0, b: 1.6784314, a: 1}
+    - _EmissionColor: {r: 0, g: 0, b: 0, a: 1}
     - _SpecColor: {r: 0.19999996, g: 0.19999996, b: 0.19999996, a: 1}
   m_BuildTextureStacks: []
   m_AllowLocking: 1
