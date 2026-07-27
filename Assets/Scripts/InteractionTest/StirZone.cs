@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 using Unity.XR.CoreUtils;
 using UnityEngine.XR.Interaction.Toolkit.Interactors;
@@ -25,16 +26,47 @@ namespace WhoCastThat.Interactions
         private float nextDipTime;
         private Transform localRig;
 
+        // Hands currently overlapping the pot, and whether we will accept the next one.
+        private readonly HashSet<Collider> handsInside = new HashSet<Collider>();
+        private CauldronOrbit orbit;
+        private bool armed;
+
+        private void Awake()
+        {
+            orbit = GetComponentInParent<CauldronOrbit>();
+        }
+
+        // The pot orbits to the active player, so it can slide over a hand that was
+        // already resting there — Unity raises OnTriggerEnter for that just the same, and
+        // the round would brew itself the moment the pot arrived. So we only arm once the
+        // pot has settled AND the zone is empty; the dip then has to be a real entry.
+        private void Update()
+        {
+            handsInside.RemoveWhere(hand => hand == null || !hand.gameObject.activeInHierarchy);
+
+            if (!armed && handsInside.Count == 0 && (orbit == null || orbit.IsSettled))
+            {
+                armed = true;
+            }
+        }
+
         private void OnTriggerEnter(Collider other)
         {
-            if (Time.time < nextDipTime)
+            if (!IsLocalHand(other))
             {
                 return;
             }
 
-            if (!IsLocalHand(other))
+            handsInside.Add(other);
+
+            if (!armed || Time.time < nextDipTime)
             {
                 return;
+            }
+
+            if (orbit != null && !orbit.IsSettled)
+            {
+                return; // pot is still flying to us
             }
 
             NetworkedSpellGame game = NetworkedSpellGame.Instance;
@@ -43,8 +75,14 @@ namespace WhoCastThat.Interactions
                 return;
             }
 
+            armed = false;
             nextDipTime = Time.time + dipCooldown;
             game.RequestBrew();
+        }
+
+        private void OnTriggerExit(Collider other)
+        {
+            handsInside.Remove(other);
         }
 
         // The avatar hands are networked objects (Player/<hand>/HandCollider): the ones

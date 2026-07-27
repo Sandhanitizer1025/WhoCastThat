@@ -29,6 +29,15 @@ namespace WhoCastThat.Interactions
                 return; // only the potion's owner resolves the cast
             }
 
+            // A freshly brewed potion is kinematic while the authority floats it from the
+            // pot out to the rack, and that path crosses this zone. Only a potion a player
+            // has actually let go of counts as played.
+            Rigidbody body = potion.GetComponent<Rigidbody>();
+            if (body != null && body.isKinematic)
+            {
+                return;
+            }
+
             // Resolve the spell on the authority, then remove the played potion.
             NetworkedSpellGame.Instance.RequestCast(potion.Type);
             netObj.Despawn();

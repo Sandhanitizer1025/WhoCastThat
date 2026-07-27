@@ -32,7 +32,7 @@ Transform:
   m_GameObject: {fileID: 592917901370543573}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0.1562, y: 0.0233, z: -0.0007}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
@@ -109,7 +109,7 @@ MonoBehaviour:
   m_FirstSelectEntered:
     m_PersistentCalls:
       m_Calls:
-      - m_Target: {fileID: 6668928625414005112}
+      - m_Target: {fileID: 0}
         m_TargetAssemblyTypeName: UnityEngine.Collider, UnityEngine
         m_MethodName: set_material
         m_Mode: 2
@@ -125,7 +125,7 @@ MonoBehaviour:
   m_LastSelectExited:
     m_PersistentCalls:
       m_Calls:
-      - m_Target: {fileID: 6668928625414005112}
+      - m_Target: {fileID: 0}
         m_TargetAssemblyTypeName: UnityEngine.Collider, UnityEngine
         m_MethodName: set_material
         m_Mode: 2
@@ -581,8 +581,8 @@ Transform:
   m_GameObject: {fileID: 5369986086223595934}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: -0.40942293, y: -0.09350134, z: 0.0006999858}
-  m_LocalScale: {x: 34.206337, y: 34.206337, z: 34.206337}
+  m_LocalPosition: {x: -0.15661496, y: -0.07020134, z: -0.000000008381903}
+  m_LocalScale: {x: 21.156155, y: 34.206337, z: 21.156155}
   m_ConstrainProportionsScale: 0
   m_Children:
   - {fileID: 6552875106115691860}
@@ -683,7 +683,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 1481165566924405054}
-  - component: {fileID: 6668928625414005112}
+  - component: {fileID: 8015219064426569937}
   m_Layer: 0
   m_Name: Collider
   m_TagString: Untagged
@@ -706,8 +706,8 @@ Transform:
   m_Children: []
   m_Father: {fileID: 7561972817775921216}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!135 &6668928625414005112
-SphereCollider:
+--- !u!65 &8015219064426569937
+BoxCollider:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
@@ -725,5 +725,5 @@ SphereCollider:
   m_ProvidesContacts: 0
   m_Enabled: 1
   serializedVersion: 3
-  m_Radius: 0.06
+  m_Size: {x: 0.024, y: 0.134, z: 0.024}
   m_Center: {x: 0, y: 0, z: 0}

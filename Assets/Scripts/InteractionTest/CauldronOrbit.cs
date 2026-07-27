@@ -29,9 +29,34 @@ namespace WhoCastThat.Interactions
         [SerializeField] private float bobAmplitude = 0.015f;
         [SerializeField] private float bobSpeed = 1.5f;
 
+        // How close to the anchor counts as "arrived".
+        private const float SettleDistance = 0.05f;
+
         private float baseHeight;
         private Vector3 targetXZ;
         private bool hasTarget;
+
+        /// <summary>
+        /// True once the pot has finished floating to the active player's side. Callers
+        /// use this to avoid reacting while the pot is still in transit — most importantly
+        /// <see cref="StirZone"/>, which must not read the pot sliding over a resting hand
+        /// as a deliberate dip.
+        /// </summary>
+        public bool IsSettled
+        {
+            get
+            {
+                if (!hasTarget)
+                {
+                    return true;
+                }
+
+                Vector3 position = transform.position;
+                float dx = position.x - targetXZ.x;
+                float dz = position.z - targetXZ.z;
+                return dx * dx + dz * dz < SettleDistance * SettleDistance;
+            }
+        }
 
         private void Start()
         {

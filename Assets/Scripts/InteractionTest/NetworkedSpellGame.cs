@@ -429,7 +429,7 @@ namespace WhoCastThat.Interactions
             Transform slot = GetNextRackSlot(seat, rack);
             if (slot != null)
             {
-                restPos = slot.position + Vector3.up * 0.04f;
+                restPos = RestPositionInSlot(slot);
                 restRot = slot.rotation;
             }
             else if (rack != null)
@@ -499,7 +499,53 @@ namespace WhoCastThat.Interactions
             {
                 body.position = to;
                 body.isKinematic = wasKinematic; // restore so it can be grabbed normally
+
+                if (!body.isKinematic)
+                {
+                    // Driving a kinematic body by position leaves implicit velocity behind.
+                    // Without clearing it the potion is flung out of the rack the instant
+                    // physics takes back over, which reads as "it never went in".
+                    body.linearVelocity = Vector3.zero;
+                    body.angularVelocity = Vector3.zero;
+                }
             }
+        }
+
+        // Stand a tube on whatever surface is actually under its slot.
+        //
+        // The rack is tiered: its two rows of slots sit ~4 cm apart, so any single fixed
+        // offset buries one row inside the rack mesh. Physics then resolves that overlap
+        // by flinging the potion across the table, which reads as "the potion never went
+        // into the rack". Probing for the real surface keeps both rows correct, and keeps
+        // working if the rack is ever swapped for different art.
+        private Vector3 RestPositionInSlot(Transform slot)
+        {
+            const float tubeHalfHeight = 0.067f;
+            const float clearance = 0.002f;
+
+            // Starts above the rack; the ray drops cleanly through the slot's hole.
+            RaycastHit[] hits = Physics.RaycastAll(slot.position + Vector3.up * 0.2f, Vector3.down, 0.5f);
+
+            float surface = float.NegativeInfinity;
+            for (int i = 0; i < hits.Length; i++)
+            {
+                if (hits[i].collider.GetComponentInParent<NetworkedPotion>() != null)
+                {
+                    continue; // a tube already standing here is not the floor
+                }
+
+                if (hits[i].point.y > surface)
+                {
+                    surface = hits[i].point.y;
+                }
+            }
+
+            if (float.IsNegativeInfinity(surface))
+            {
+                return slot.position + Vector3.up * 0.032f;
+            }
+
+            return new Vector3(slot.position.x, surface + tubeHalfHeight + clearance, slot.position.z);
         }
 
         // Rotate through a rack's "Slot" children so drawn potions fill tidy tube slots.
