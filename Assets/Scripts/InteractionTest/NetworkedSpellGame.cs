@@ -102,6 +102,13 @@ namespace WhoCastThat.Interactions
         private readonly NetworkVariable<int> turnsRemaining = new(
             1, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Owner);
 
+        // Size of the Hex the current player is under, or 0 if they are taking an ordinary turn.
+        // This CANNOT be derived from turnsRemaining: a normal turn and the final owed turn of an
+        // attack both read 1, yet hexing from the first must pass on 2 and from the second 4+.
+        // Tracking the attack itself gives the 2 -> 4 -> 6 ladder regardless of when it is played.
+        private readonly NetworkVariable<int> hexAttackSize = new(
+            0, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Owner);
+
         private readonly NetworkVariable<bool> gameActive = new(
             false, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Owner);
 
@@ -292,6 +299,12 @@ namespace WhoCastThat.Interactions
             public int Interrupts;
         }
 
+        // A Reflection copies the spell on the table: the same effect fires again, as though the
+        // reflector had cast it themselves. Copies are collected during the interrupt window and
+        // applied after the original resolves, so a Dispel landing later still wipes the whole
+        // stack — "any card beneath a Dispel never existed" covers the copies too.
+        private readonly List<ulong> pendingCopyCasters = new();
+
         private PendingSpell pending;
         private bool pendingActive;
         private Coroutine windowRoutine;
@@ -354,11 +367,13 @@ namespace WhoCastThat.Interactions
 
             currentTurnIndex.Value = 0;
             turnsRemaining.Value = 1;
+            hexAttackSize.Value = 0;
             stirring.Value = false;
             interruptWindowOpen.Value = false;
             brewing = false;
             drawInProgress = false;
             pendingActive = false;
+            pendingCopyCasters.Clear();
             ClearCurses();
             eliminated.Clear();
 
@@ -1330,6 +1345,7 @@ namespace WhoCastThat.Interactions
                 targetId = NextActivePlayerId(casterId);
             }
 
+            pendingCopyCasters.Clear();
             pending = new PendingSpell
             {
                 Type = type,
@@ -1377,18 +1393,51 @@ namespace WhoCastThat.Interactions
             pendingActive = false;
             interruptWindowOpen.Value = false;
 
+            var copyCasters = new List<ulong>(pendingCopyCasters);
+            pendingCopyCasters.Clear();
+
             if (pending.Cancelled)
             {
-                // A dispelled spell simply fizzles; the caster's turn carries on.
+                // A dispelled spell simply fizzles; the caster's turn carries on. Its Reflection
+                // copies go with it — the Dispel erases the card they were copying.
+                LogCast($"{pending.Type} cancelled by Dispel; {copyCasters.Count} copy(ies) discarded.");
                 SetAnnouncement($"{pending.Type} fizzles out. {PlayerLabel(CurrentTurnClientId)} is still up.");
                 return;
             }
 
+            // Hex is settled in one move rather than several: each copy makes the single attack two
+            // turns heavier, because two Hexes cannot each hand the turn to a different player.
+            if (pending.Type == PotionType.Hex)
+            {
+                ApplyEffect(pending.Type, pending.Caster, pending.Target, copyCasters.Count);
+                return;
+            }
+
             ApplyEffect(pending.Type, pending.Caster, pending.Target);
+
+            for (int i = 0; i < copyCasters.Count; i++)
+            {
+                ulong copyCaster = copyCasters[i];
+                if (eliminated.Contains(copyCaster))
+                {
+                    continue;
+                }
+
+                // A copied Phase would end a turn the reflector does not hold, so it does nothing.
+                if (pending.Type == PotionType.Phase)
+                {
+                    LogCast($"Copied Phase from {PlayerLabel(copyCaster)} ignored — not their turn.");
+                    continue;
+                }
+
+                LogCast($"COPY of {pending.Type} resolving for {PlayerLabel(copyCaster)}.");
+                ApplyEffect(pending.Type, copyCaster, NextActivePlayerId(copyCaster));
+            }
         }
 
         // Dispel cancels the spell on the table (and can cancel a Dispel, flipping it back on).
-        // Reflection bounces it, swapping who cast it and who it lands on.
+        // Reflection copies it: the same spell resolves a second time with the reflector as its
+        // caster. It is recorded rather than applied here so a later Dispel still wipes everything.
         private void HandleInterrupt(PotionType type, ulong interrupterId)
         {
             pending.Interrupts++;
@@ -1396,14 +1445,17 @@ namespace WhoCastThat.Interactions
             if (type == PotionType.Dispel)
             {
                 pending.Cancelled = !pending.Cancelled;
+                LogCast($"DISPEL by {PlayerLabel(interrupterId)} — cancelled is now {pending.Cancelled}.");
                 SetAnnouncement(pending.Cancelled
                     ? $"{PlayerLabel(interrupterId)} DISPELS {pending.Type}!"
                     : $"{PlayerLabel(interrupterId)} dispels the dispel — {pending.Type} is back on!");
             }
             else
             {
-                (pending.Caster, pending.Target) = (pending.Target, pending.Caster);
-                SetAnnouncement($"{PlayerLabel(interrupterId)} REFLECTS {pending.Type} back at {PlayerLabel(pending.Target)}!");
+                pendingCopyCasters.Add(interrupterId);
+                LogCast($"REFLECT by {PlayerLabel(interrupterId)} — {pending.Type} will resolve " +
+                        $"{pendingCopyCasters.Count + 1} time(s).");
+                SetAnnouncement($"{PlayerLabel(interrupterId)} REFLECTS {pending.Type} — it strikes again!");
             }
 
             // Reopen the window so the answer can itself be answered.
@@ -1438,7 +1490,7 @@ namespace WhoCastThat.Interactions
             return false;
         }
 
-        private void ApplyEffect(PotionType type, ulong casterId, ulong targetId)
+        private void ApplyEffect(PotionType type, ulong casterId, ulong targetId, int reflectionCopies = 0)
         {
             bool endsTurn = type == PotionType.Hex || type == PotionType.Phase;
             LogCast($"RESOLVE {type} by {PlayerLabel(casterId)} on {PlayerLabel(targetId)} — " +
@@ -1450,9 +1502,10 @@ namespace WhoCastThat.Interactions
             {
                 case PotionType.Hex:
                 {
-                    // Attack: forfeit your remaining turns and pile them onto the target,
-                    // plus two more. Stacks, so a hexed player can hex the next one along.
-                    int pass = Mathf.Max(0, turnsRemaining.Value - 1) + 2;
+                    // Attack: forfeit your turns and pile them onto the target. The target takes
+                    // the attack you were under plus two, so an unhexed caster passes on 2 and the
+                    // ladder runs 2 -> 4 -> 6 however late in your owed turns you play it.
+                    int pass = hexAttackSize.Value + 2 + (reflectionCopies * 2);
                     turnsRemaining.Value = 0;
                     SetAnnouncement($"{PlayerLabel(casterId)} hexes {PlayerLabel(targetId)} — {pass} turns in a row!");
                     MoveToPlayer(targetId, pass);
@@ -1608,6 +1661,7 @@ namespace WhoCastThat.Interactions
 
             currentTurnIndex.Value = index;
             turnsRemaining.Value = Mathf.Max(1, turns);
+            hexAttackSize.Value = 0; // play reached them normally, so they are not under a Hex
             LogCast($"TURN PASSED to {PlayerLabel(CurrentTurnClientId)} for {turnsRemaining.Value} turn(s).");
             AnnounceCurrentTurn();
         }
@@ -1626,7 +1680,9 @@ namespace WhoCastThat.Interactions
             drawInProgress = false;
             currentTurnIndex.Value = index;
             turnsRemaining.Value = Mathf.Max(1, turns);
-            LogCast($"TURN FORCED to {PlayerLabel(playerId)} for {turnsRemaining.Value} turn(s).");
+            hexAttackSize.Value = turnsRemaining.Value; // they are now under a Hex of this size
+            LogCast($"TURN FORCED to {PlayerLabel(playerId)} for {turnsRemaining.Value} turn(s) " +
+                    $"(hex attack size {hexAttackSize.Value}).");
             AnnounceCurrentTurn();
         }
 

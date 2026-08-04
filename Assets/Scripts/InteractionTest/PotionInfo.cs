@@ -46,7 +46,7 @@ namespace WhoCastThat.Interactions
                 case PotionType.Phase:
                     return "End your turn without drawing.";
                 case PotionType.Reflection:
-                    return "Bounce the spell on the table back at its caster. Out of turn.";
+                    return "Copy the spell on the table — it strikes again for you. Out of turn.";
                 case PotionType.Counterspell:
                     return "Survive a Curse. The Curse returns to the cauldron.";
                 case PotionType.Curse:
