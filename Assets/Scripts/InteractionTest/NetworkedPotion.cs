@@ -42,10 +42,15 @@ namespace WhoCastThat.Interactions
         [SerializeField] private bool showCastableGlow = true;
 
         [Tooltip("Colour of the castable glow.")]
-        [SerializeField] private Color castableGlowColor = new(0.55f, 0.95f, 0.65f, 0.28f);
+        [SerializeField] private Color castableGlowColor = new(0.35f, 1f, 0.45f, 0.85f);
 
-        [Tooltip("How far the glow shell stands off the tube, in metres.")]
-        [SerializeField] private float glowThickness = 0.005f;
+        [Tooltip("Diameter of the glow pad at the tube's base, in metres. Kept well under the " +
+                 "0.083 m rack slot pitch so neighbouring pads stay visually separate.")]
+        [SerializeField] private float glowRingDiameter = 0.048f;
+
+        [Tooltip("How far up from the tube's base the pad sits, in metres. Must clear the game " +
+                 "manager's slotInsertionDepth (0.045) so the pad is not buried inside the rack.")]
+        [SerializeField] private float glowRingRise = 0.046f;
 
         [Tooltip("Seconds between castable re-checks. The answer only changes on turn/curse events.")]
         [SerializeField] private float glowCheckInterval = 0.15f;
@@ -203,10 +208,18 @@ namespace WhoCastThat.Interactions
         }
 
         /// <summary>
-        /// A translucent shell just larger than the tube. Built as its own unlit object rather
-        /// than driving emission on the liquid: that material is a bespoke shadergraph
-        /// (_SideColour/_TopColour) with no emission channel to push, so a property block
-        /// would silently do nothing. Swap this for a real outline shader when art lands.
+        /// A lit pad on the rack surface at the foot of the tube, echoing the ring PlayZone draws
+        /// on the table. Built as its own unlit object rather than driving emission on the liquid:
+        /// that material is a bespoke shadergraph (_SideColour/_TopColour) with no emission channel
+        /// to push, so a property block would silently do nothing.
+        ///
+        /// It deliberately does NOT wrap the tube. A shell around the glass — solid or inverted-hull
+        /// — was measured against all nine liquid colours and destroys the colour coding that
+        /// identifies a potion: Counterspell (mint) and Phase (green) all but vanish into a green
+        /// shell, and every other type reads washed out. The tube is transparent and writes no
+        /// depth, so a surrounding hull shows through the glass instead of hugging the silhouette;
+        /// no thickness makes that read as an outline. Marking the potion from outside keeps the
+        /// liquid untouched. Swap for real art later, but keep the cue off the glass.
         /// </summary>
         private void BuildGlow()
         {
@@ -220,23 +233,20 @@ namespace WhoCastThat.Interactions
 
             shell.name = "CastableGlow";
             shell.transform.SetParent(transform, false);
-            shell.transform.localPosition = Vector3.zero;
             shell.transform.localRotation = Quaternion.identity;
 
-            // Sized off the collider so it keeps fitting if the tube is ever re-scaled. The
-            // cylinder primitive is 1 unit across and 2 tall, hence the half-height on Y.
-            float diameter = 0.032f;
+            // Height comes from the collider so the pad keeps sitting at the tube's foot if the
+            // tube is ever re-scaled. The collider lives on a child, not the root.
             float height = 0.1205f;
-            if (GetComponent<Collider>() is BoxCollider box)
+            if (GetComponentInChildren<BoxCollider>() is BoxCollider box)
             {
-                diameter = Mathf.Max(box.size.x, box.size.z);
                 height = box.size.y;
             }
 
-            shell.transform.localScale = new Vector3(
-                diameter + (glowThickness * 2f),
-                (height * 0.5f) + glowThickness,
-                diameter + (glowThickness * 2f));
+            shell.transform.localPosition = new Vector3(0f, (-height * 0.5f) + glowRingRise, 0f);
+
+            // The cylinder primitive is 1 unit across and 2 tall, hence the halved Y for a slab.
+            shell.transform.localScale = new Vector3(glowRingDiameter, 0.0004f, glowRingDiameter);
 
             var renderer = shell.GetComponent<Renderer>();
             Shader unlit = Shader.Find("Universal Render Pipeline/Unlit");
@@ -248,11 +258,22 @@ namespace WhoCastThat.Interactions
             if (unlit != null)
             {
                 var mat = new Material(unlit);
+
+                // _Surface/_Blend alone do NOT make a URP material transparent. Those are editor-
+                // facing toggles that the material inspector turns into render state via
+                // ValidateMaterial; a material built in code never runs that, so it keeps the
+                // opaque One/Zero blend and the colour's alpha is ignored entirely. The glow
+                // rendered as a solid slab because of this. Set the blend state explicitly.
                 mat.SetFloat("_Surface", 1f); // transparent
                 mat.SetFloat("_Blend", 0f);   // alpha blend
                 mat.SetFloat("_ZWrite", 0f);
-                mat.renderQueue = (int)UnityEngine.Rendering.RenderQueue.Transparent;
+                mat.SetFloat("_SrcBlend", (float)UnityEngine.Rendering.BlendMode.SrcAlpha);
+                mat.SetFloat("_DstBlend", (float)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
+                mat.SetFloat("_AlphaClip", 0f);
+                mat.DisableKeyword("_ALPHATEST_ON");
                 mat.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
+                mat.SetOverrideTag("RenderType", "Transparent");
+                mat.renderQueue = (int)UnityEngine.Rendering.RenderQueue.Transparent;
                 mat.color = castableGlowColor;
                 renderer.sharedMaterial = mat;
             }
