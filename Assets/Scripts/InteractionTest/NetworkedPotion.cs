@@ -38,7 +38,7 @@ namespace WhoCastThat.Interactions
 
         [Header("Castable highlight")]
         [Tooltip("Glow a potion the local player could legally cast right now — including out " +
-                 "of turn, so a Dispel or Reflection announces itself during someone else's turn.")]
+                 "of turn, so a Dispel announces itself during someone else's turn.")]
         [SerializeField] private bool showCastableGlow = true;
 
         [Tooltip("Colour of the castable glow.")]

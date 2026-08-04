@@ -80,6 +80,9 @@ namespace WhoCastThat.Interactions
         [Tooltip("Safety cap on how long a Dispel/Reflection chain can get.")]
         [SerializeField] private int maxInterruptChain = 6;
 
+        [Tooltip("Seconds the Foresight potions hang above the cauldron before sinking back.")]
+        [SerializeField] private float foresightRevealSeconds = 4f;
+
         [Tooltip("Seconds a player gets to choose where a countered Curse goes back into the deck " +
                  "before it is placed at random for them. Stops a match stalling on an idle player.")]
         [SerializeField] private float cursePlacementSeconds = 15f;
@@ -107,6 +110,13 @@ namespace WhoCastThat.Interactions
             1, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Owner);
 
         private const ulong NoPlayer = ulong.MaxValue;
+        private const int NoSpell = -1;
+
+        // The last spell that actually resolved, as (int)PotionType — what a Reflection copies.
+        // Replicated because each client decides for itself whether its Reflection is castable
+        // right now, and that answer depends on there being something to copy.
+        private readonly NetworkVariable<int> lastResolvedSpell = new(
+            NoSpell, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Owner);
 
         // Whose Counterspell is waiting on a "where does the Curse go?" choice, or NoPlayer.
         // Replicated so the chooser's own client can offer the choice and everyone else can be
@@ -198,11 +208,11 @@ namespace WhoCastThat.Interactions
                 return type == PotionType.Counterspell;
             }
 
-            // A spell is waiting on the table. Answering it is the one thing that happens out
-            // of turn — this is what a player wants to spot during someone else's turn.
+            // A spell is waiting on the table. Dispel is the ONLY card that plays out of turn —
+            // this is what a player wants to spot during someone else's turn.
             if (InterruptWindowOpen)
             {
-                return type == PotionType.Dispel || type == PotionType.Reflection;
+                return type == PotionType.Dispel;
             }
 
             if (!IsLocalPlayersTurn)
@@ -210,11 +220,15 @@ namespace WhoCastThat.Interactions
                 return false;
             }
 
-            // Your turn, nothing pending: everything except the answers, which need a spell to
-            // answer, and the Counterspell, which needs a Curse.
-            return type != PotionType.Dispel
-                && type != PotionType.Reflection
-                && type != PotionType.Counterspell;
+            // Reflection copies the last spell that resolved, so it is dead until something has.
+            if (type == PotionType.Reflection)
+            {
+                return lastResolvedSpell.Value != NoSpell;
+            }
+
+            // Your turn, nothing pending: everything except Dispel, which answers a spell, and
+            // Counterspell, which answers a Curse.
+            return type != PotionType.Dispel && type != PotionType.Counterspell;
         }
 
         /// <summary>Seat (turn-order) index whose turn it is, or -1 before the game starts.</summary>
@@ -311,12 +325,6 @@ namespace WhoCastThat.Interactions
             public int Interrupts;
         }
 
-        // A Reflection copies the spell on the table: the same effect fires again, as though the
-        // reflector had cast it themselves. Copies are collected during the interrupt window and
-        // applied after the original resolves, so a Dispel landing later still wipes the whole
-        // stack — "any card beneath a Dispel never existed" covers the copies too.
-        private readonly List<ulong> pendingCopyCasters = new();
-
         private PendingSpell pending;
         private bool pendingActive;
         private Coroutine windowRoutine;
@@ -325,6 +333,7 @@ namespace WhoCastThat.Interactions
         public const int RandomPlacement = 3;
 
         private Coroutine cursePlacementRoutine;
+        private ForesightDisplay foresightDisplay;
 
         public override void OnNetworkSpawn()
         {
@@ -393,7 +402,7 @@ namespace WhoCastThat.Interactions
             brewing = false;
             drawInProgress = false;
             pendingActive = false;
-            pendingCopyCasters.Clear();
+            lastResolvedSpell.Value = NoSpell;
             ClearCurses();
             eliminated.Clear();
 
@@ -1284,8 +1293,8 @@ namespace WhoCastThat.Interactions
                 return;
             }
 
-            // 1) Interrupts resolve first, and may be played out of turn.
-            if (pendingActive && (type == PotionType.Dispel || type == PotionType.Reflection))
+            // 1) Interrupts resolve first. Dispel is the only card playable out of turn.
+            if (pendingActive && type == PotionType.Dispel)
             {
                 ConsumePotion(potionId);
                 HandleInterrupt(type, casterId);
@@ -1326,16 +1335,24 @@ namespace WhoCastThat.Interactions
                 return;
             }
 
-            // The three answering potions only ever respond to something: a Dispel or Reflection
-            // needs a spell on the table, a Counterspell needs a Curse. Both of those cases are
-            // handled above, so reaching here means there is nothing to answer. Refuse instead of
-            // consuming — CanLocalPlayerCastNow already tells the player these are not castable
-            // right now, and spending the potion for no effect would quietly cost them a card
-            // (and, for a Counterspell, the only thing standing between them and a Curse).
-            if (type == PotionType.Dispel || type == PotionType.Reflection || type == PotionType.Counterspell)
+            // The two answering potions only ever respond to something: a Dispel needs a spell on
+            // the table, a Counterspell needs a Curse. Both cases are handled above, so reaching
+            // here means there is nothing to answer. Refuse instead of consuming — spending the
+            // potion for no effect would quietly cost the player a card (and for a Counterspell,
+            // the only thing standing between them and a Curse).
+            if (type == PotionType.Dispel || type == PotionType.Counterspell)
             {
                 LogCast($"REFUSED {type} from {PlayerLabel(casterId)}: nothing to answer.");
                 SetAnnouncement($"{PlayerLabel(casterId)} has nothing to answer — the {type} is not spent.");
+                RejectPotion(potionId);
+                return;
+            }
+
+            // Reflection needs something to copy.
+            if (type == PotionType.Reflection && lastResolvedSpell.Value == NoSpell)
+            {
+                LogCast($"REFUSED Reflection from {PlayerLabel(casterId)}: no spell has resolved yet.");
+                SetAnnouncement($"{PlayerLabel(casterId)} has no spell to reflect yet.");
                 RejectPotion(potionId);
                 return;
             }
@@ -1367,7 +1384,6 @@ namespace WhoCastThat.Interactions
                 targetId = NextActivePlayerId(casterId);
             }
 
-            pendingCopyCasters.Clear();
             pending = new PendingSpell
             {
                 Type = type,
@@ -1390,7 +1406,7 @@ namespace WhoCastThat.Interactions
                     "nothing happens until it closes.");
             pendingActive = true;
             interruptWindowOpen.Value = true;
-            SetAnnouncement($"{PlayerLabel(casterId)} casts {type} on {PlayerLabel(targetId)} — Dispel or Reflect now!");
+            SetAnnouncement($"{PlayerLabel(casterId)} casts {type} on {PlayerLabel(targetId)} — Dispel it now!");
             RestartWindow();
         }
 
@@ -1415,70 +1431,27 @@ namespace WhoCastThat.Interactions
             pendingActive = false;
             interruptWindowOpen.Value = false;
 
-            var copyCasters = new List<ulong>(pendingCopyCasters);
-            pendingCopyCasters.Clear();
-
             if (pending.Cancelled)
             {
-                // A dispelled spell simply fizzles; the caster's turn carries on. Its Reflection
-                // copies go with it — the Dispel erases the card they were copying.
-                LogCast($"{pending.Type} cancelled by Dispel; {copyCasters.Count} copy(ies) discarded.");
+                // A dispelled spell simply fizzles; the caster's turn carries on.
+                LogCast($"{pending.Type} cancelled by Dispel.");
                 SetAnnouncement($"{pending.Type} fizzles out. {PlayerLabel(CurrentTurnClientId)} is still up.");
                 return;
             }
 
-            // Hex is settled in one move rather than several: each copy makes the single attack two
-            // turns heavier, because two Hexes cannot each hand the turn to a different player.
-            if (pending.Type == PotionType.Hex)
-            {
-                ApplyEffect(pending.Type, pending.Caster, pending.Target, copyCasters.Count);
-                return;
-            }
-
             ApplyEffect(pending.Type, pending.Caster, pending.Target);
-
-            for (int i = 0; i < copyCasters.Count; i++)
-            {
-                ulong copyCaster = copyCasters[i];
-                if (eliminated.Contains(copyCaster))
-                {
-                    continue;
-                }
-
-                // A copied Phase would end a turn the reflector does not hold, so it does nothing.
-                if (pending.Type == PotionType.Phase)
-                {
-                    LogCast($"Copied Phase from {PlayerLabel(copyCaster)} ignored — not their turn.");
-                    continue;
-                }
-
-                LogCast($"COPY of {pending.Type} resolving for {PlayerLabel(copyCaster)}.");
-                ApplyEffect(pending.Type, copyCaster, NextActivePlayerId(copyCaster));
-            }
         }
 
-        // Dispel cancels the spell on the table (and can cancel a Dispel, flipping it back on).
-        // Reflection copies it: the same spell resolves a second time with the reflector as its
-        // caster. It is recorded rather than applied here so a later Dispel still wipes everything.
+        // Dispel cancels the spell on the table, and can cancel a Dispel, flipping it back on.
+        // It is the only card that plays out of turn, so this is the whole interrupt system.
         private void HandleInterrupt(PotionType type, ulong interrupterId)
         {
             pending.Interrupts++;
-
-            if (type == PotionType.Dispel)
-            {
-                pending.Cancelled = !pending.Cancelled;
-                LogCast($"DISPEL by {PlayerLabel(interrupterId)} — cancelled is now {pending.Cancelled}.");
-                SetAnnouncement(pending.Cancelled
-                    ? $"{PlayerLabel(interrupterId)} DISPELS {pending.Type}!"
-                    : $"{PlayerLabel(interrupterId)} dispels the dispel — {pending.Type} is back on!");
-            }
-            else
-            {
-                pendingCopyCasters.Add(interrupterId);
-                LogCast($"REFLECT by {PlayerLabel(interrupterId)} — {pending.Type} will resolve " +
-                        $"{pendingCopyCasters.Count + 1} time(s).");
-                SetAnnouncement($"{PlayerLabel(interrupterId)} REFLECTS {pending.Type} — it strikes again!");
-            }
+            pending.Cancelled = !pending.Cancelled;
+            LogCast($"DISPEL by {PlayerLabel(interrupterId)} — cancelled is now {pending.Cancelled}.");
+            SetAnnouncement(pending.Cancelled
+                ? $"{PlayerLabel(interrupterId)} DISPELS {pending.Type}!"
+                : $"{PlayerLabel(interrupterId)} dispels the dispel — {pending.Type} is back on!");
 
             // Reopen the window so the answer can itself be answered.
             if (pending.Interrupts < maxInterruptChain && AnyoneCanInterrupt(interrupterId))
@@ -1504,7 +1477,7 @@ namespace WhoCastThat.Interactions
                 {
                     continue;
                 }
-                if (PlayerHolds(id, PotionType.Dispel) || PlayerHolds(id, PotionType.Reflection))
+                if (PlayerHolds(id, PotionType.Dispel))
                 {
                     return true;
                 }
@@ -1512,13 +1485,21 @@ namespace WhoCastThat.Interactions
             return false;
         }
 
-        private void ApplyEffect(PotionType type, ulong casterId, ulong targetId, int reflectionCopies = 0)
+        private void ApplyEffect(PotionType type, ulong casterId, ulong targetId)
         {
             bool endsTurn = type == PotionType.Hex || type == PotionType.Phase;
             LogCast($"RESOLVE {type} by {PlayerLabel(casterId)} on {PlayerLabel(targetId)} — " +
                     (endsTurn
                         ? "this ends the caster's turn."
                         : "the caster KEEPS the turn and must still draw to end it."));
+
+            // Remember what a Reflection would copy. Reflection itself is never recorded: it
+            // resolves INTO another spell, and that spell records itself on the way through, so
+            // reflecting a reflected Hex still copies the Hex rather than chasing its own tail.
+            if (type != PotionType.Reflection && type != PotionType.Dispel)
+            {
+                lastResolvedSpell.Value = (int)type;
+            }
 
             switch (type)
             {
@@ -1527,7 +1508,7 @@ namespace WhoCastThat.Interactions
                     // Attack: forfeit your turns and pile them onto the target. The target takes
                     // the attack you were under plus two, so an unhexed caster passes on 2 and the
                     // ladder runs 2 -> 4 -> 6 however late in your owed turns you play it.
-                    int pass = hexAttackSize.Value + 2 + (reflectionCopies * 2);
+                    int pass = hexAttackSize.Value + 2;
                     turnsRemaining.Value = 0;
                     SetAnnouncement($"{PlayerLabel(casterId)} hexes {PlayerLabel(targetId)} — {pass} turns in a row!");
                     MoveToPlayer(targetId, pass);
@@ -1556,8 +1537,17 @@ namespace WhoCastThat.Interactions
                     SetAnnouncement($"{PlayerLabel(casterId)} played a Counterspell with nothing to counter.");
                     return;
 
-                case PotionType.Dispel:
                 case PotionType.Reflection:
+                {
+                    // Copy the last spell that resolved, as though the reflector had cast it.
+                    // Guarded on the way in, so there is always something to copy here.
+                    var copied = (PotionType)lastResolvedSpell.Value;
+                    SetAnnouncement($"{PlayerLabel(casterId)} reflects {copied}!");
+                    ApplyEffect(copied, casterId, NextActivePlayerId(casterId));
+                    return;
+                }
+
+                case PotionType.Dispel:
                     SetAnnouncement($"{PlayerLabel(casterId)} played {type} with nothing to answer.");
                     return;
 
@@ -1579,7 +1569,25 @@ namespace WhoCastThat.Interactions
             }
 
             SetAnnouncement($"{PlayerLabel(playerId)} peers into the cauldron...");
+
+            // Two separate messages, deliberately. Everyone is told only HOW MANY potions rose out
+            // of the pot; the types go to the caster alone. Sending the types to everyone and
+            // hiding them client-side would put the secret on every machine in the session.
+            // The two handlers are independent, so their arrival order does not matter (§ the rule
+            // about never rendering a NetworkVariable an RPC just triggered).
+            ForesightPreviewRpc(n, playerId);
             ForesightRpc(types, RpcTarget.Single(playerId, RpcTargetUse.Temp));
+        }
+
+        // Everyone except the caster: anonymous tubes, no types on the wire.
+        [Rpc(SendTo.Everyone)]
+        private void ForesightPreviewRpc(int count, ulong casterId)
+        {
+            if (NetworkManager.LocalClientId == casterId)
+            {
+                return; // the caster gets the revealed version instead
+            }
+            ShowForesight(null, count);
         }
 
         [Rpc(SendTo.SpecifiedInParams)]
@@ -1590,7 +1598,26 @@ namespace WhoCastThat.Interactions
             {
                 revealed[i] = (PotionType)types[i];
             }
+
+            ShowForesight(revealed, revealed.Length);
             ForesightRevealed?.Invoke(revealed);
+        }
+
+        // Local presentation only. The display component is created on demand so the reveal needs
+        // no scene wiring — drop the game manager in and it works.
+        private void ShowForesight(PotionType[] types, int count)
+        {
+            if (foresightDisplay == null)
+            {
+                foresightDisplay = gameObject.AddComponent<ForesightDisplay>();
+            }
+
+            foresightDisplay.Reveal(
+                types,
+                count,
+                networkedPotionPrefab,
+                cauldronRig != null ? cauldronRig : transform,
+                foresightRevealSeconds);
         }
 
         // Tribute: the target hands over one of their potions (picked at random, since

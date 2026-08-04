@@ -46,7 +46,7 @@ namespace WhoCastThat.Interactions
                 case PotionType.Phase:
                     return "End your turn without drawing.";
                 case PotionType.Reflection:
-                    return "Copy the spell on the table — it strikes again for you. Out of turn.";
+                    return "Cast the last spell that resolved, as if it were yours.";
                 case PotionType.Counterspell:
                     return "Survive a Curse. The Curse returns to the cauldron.";
                 case PotionType.Curse:
@@ -63,7 +63,7 @@ namespace WhoCastThat.Interactions
             {
                 case PotionType.Dispel:
                 case PotionType.Reflection:
-                    return "Any time a spell is waiting";
+                    return "On your turn";
                 case PotionType.Counterspell:
                     return "When you are cursed";
                 case PotionType.Curse:
