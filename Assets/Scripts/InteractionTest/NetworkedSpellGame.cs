@@ -80,6 +80,13 @@ namespace WhoCastThat.Interactions
         [Tooltip("Safety cap on how long a Dispel/Reflection chain can get.")]
         [SerializeField] private int maxInterruptChain = 6;
 
+        [Tooltip("How far a Tribute aim ray reaches when picking whose rack you are pointing at.")]
+        [SerializeField] private float aimRange = 6f;
+
+        [Tooltip("Seconds the target of a Tribute gets to choose which potion to hand over " +
+                 "before one is taken at random.")]
+        [SerializeField] private float tributeChoiceSeconds = 20f;
+
         [Tooltip("Seconds the Foresight potions hang above the cauldron before sinking back.")]
         [SerializeField] private float foresightRevealSeconds = 4f;
 
@@ -122,6 +129,14 @@ namespace WhoCastThat.Interactions
         // Replicated so the chooser's own client can offer the choice and everyone else can be
         // told to wait, and so the turn cannot pass until the Curse has actually been placed.
         private readonly NetworkVariable<ulong> cursePlacementPlayer = new(
+            NoPlayer, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Owner);
+
+        // Who owes a potion to a Tribute, and who is collecting it. Replicated so the payer's
+        // client can offer the choice and everyone else can be told to wait.
+        private readonly NetworkVariable<ulong> tributePayer = new(
+            NoPlayer, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Owner);
+
+        private readonly NetworkVariable<ulong> tributeReceiver = new(
             NoPlayer, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Owner);
 
         // Size of the Hex the current player is under, or 0 if they are taking an ordinary turn.
@@ -200,6 +215,14 @@ namespace WhoCastThat.Interactions
             if (!gameActive.Value || type == PotionType.Curse)
             {
                 return false; // a Curse is only ever drawn, never cast
+            }
+
+            // Owing a Tribute: any potion in your rack is a legal thing to hand over, so they all
+            // glow. This is the one time potions are playable on someone else's turn other than
+            // a Dispel, and the choice of which to give is the whole point of the card.
+            if (IsLocalPlayerPayingTribute)
+            {
+                return true;
             }
 
             // Cursed: nothing but a Counterspell will save you, so nothing else is playable.
@@ -333,6 +356,7 @@ namespace WhoCastThat.Interactions
         public const int RandomPlacement = 3;
 
         private Coroutine cursePlacementRoutine;
+        private Coroutine tributeRoutine;
         private ForesightDisplay foresightDisplay;
 
         public override void OnNetworkSpawn()
@@ -397,6 +421,8 @@ namespace WhoCastThat.Interactions
             turnsRemaining.Value = 1;
             hexAttackSize.Value = 0;
             cursePlacementPlayer.Value = NoPlayer;
+            tributePayer.Value = NoPlayer;
+            tributeReceiver.Value = NoPlayer;
             stirring.Value = false;
             interruptWindowOpen.Value = false;
             brewing = false;
@@ -811,6 +837,10 @@ namespace WhoCastThat.Interactions
             {
                 return false; // a countered Curse has not been put back yet
             }
+            if (TributePending)
+            {
+                return false; // somebody still owes a potion
+            }
             if (cursedPlayers.Contains(playerId))
             {
                 SetAnnouncement($"{PlayerLabel(playerId)} must play a Counterspell before drawing!");
@@ -1217,7 +1247,98 @@ namespace WhoCastThat.Interactions
                 return;
             }
 
-            RequestCastRpc(potion.Type, NetworkManager.LocalClientId, ulong.MaxValue, netObj.NetworkObjectId);
+            // Tribute is the one spell where WHO you hit is a decision, so it reads the aim of the
+            // hand that let the potion go. Everything else auto-targets the next player.
+            ulong targetId = potion.Type == PotionType.Tribute
+                ? ResolveAimedPlayer(potion)
+                : ulong.MaxValue;
+
+            RequestCastRpc(potion.Type, NetworkManager.LocalClientId, targetId, netObj.NetworkObjectId);
+        }
+
+        /// <summary>
+        /// Which player is this Tribute aimed at? LOOK at whoever you want to rob while you drop
+        /// the potion in the ring.
+        ///
+        /// Gaze rather than the hand, because the two cannot agree here: the potion only counts as
+        /// cast once it lands in the play zone at the centre of the table, so the hand releasing it
+        /// is necessarily pointing down at the table and never at a rack. The head is free. The
+        /// release aim is still consulted afterwards, so deliberately pointing at a rack — lobbing
+        /// it across the table at someone — also works. Failing both, the authority falls back to
+        /// the next player, so an unaimed Tribute still does something rather than being refused.
+        /// </summary>
+        private ulong ResolveAimedPlayer(NetworkedPotion potion)
+        {
+            Camera view = Camera.main;
+            if (view != null)
+            {
+                ulong looked = RaycastForPlayer(view.transform.position, view.transform.forward);
+                if (looked != ulong.MaxValue)
+                {
+                    return looked;
+                }
+            }
+
+            return AimedPlayerAlong(potion);
+        }
+
+        private ulong AimedPlayerAlong(NetworkedPotion potion)
+        {
+            return potion.TryGetReleaseAim(out Vector3 origin, out Vector3 direction)
+                ? RaycastForPlayer(origin, direction)
+                : ulong.MaxValue;
+        }
+
+        private ulong RaycastForPlayer(Vector3 origin, Vector3 direction)
+        {
+            // Triggers OFF: the play zone's own trigger sits right in front of a player aiming
+            // across the table and would swallow every ray before it reached a rack.
+            bool previous = Physics.queriesHitTriggers;
+            Physics.queriesHitTriggers = false;
+
+            try
+            {
+                if (!Physics.Raycast(origin, direction, out RaycastHit hit, aimRange))
+                {
+                    return ulong.MaxValue;
+                }
+
+                int seat = SeatIndexForTransform(hit.transform);
+                if (seat < 0 || seat >= turnOrder.Count)
+                {
+                    return ulong.MaxValue;
+                }
+
+                ulong candidate = turnOrder[seat];
+                bool self = NetworkManager != null && candidate == NetworkManager.LocalClientId;
+                return (self || eliminated.Contains(candidate)) ? ulong.MaxValue : candidate;
+            }
+            finally
+            {
+                Physics.queriesHitTriggers = previous;
+            }
+        }
+
+        // Racks are meshes with children, so the hit is usually a descendant of the rack root.
+        private int SeatIndexForTransform(Transform hit)
+        {
+            if (seatRacks == null)
+            {
+                return -1;
+            }
+
+            while (hit != null)
+            {
+                for (int i = 0; i < seatRacks.Length; i++)
+                {
+                    if (seatRacks[i] == hit)
+                    {
+                        return i;
+                    }
+                }
+                hit = hit.parent;
+            }
+            return -1;
         }
 
         // Authority-only: look up a submitted potion by its network id.
@@ -1290,6 +1411,23 @@ namespace WhoCastThat.Interactions
             if (!HasAuthority || !gameActive.Value || eliminated.Contains(casterId))
             {
                 RejectPotion(potionId);
+                return;
+            }
+
+            // 0) Paying a Tribute comes before everything, and happens on someone else's turn:
+            // the potion you dropped is the one you are handing over, whatever it is.
+            if (potionId != NoPotion && casterId == tributePayer.Value)
+            {
+                NetworkedPotion offered = FindPotion(potionId);
+                if (offered != null && offered.RackSeat == GetSeatIndex(casterId))
+                {
+                    LogCast($"TRIBUTE paid: {PlayerLabel(casterId)} hands over {offered.Type}.");
+                    HandOverTribute(offered);
+                }
+                else
+                {
+                    RejectPotion(potionId); // not one of theirs to give
+                }
                 return;
             }
 
@@ -1620,18 +1758,56 @@ namespace WhoCastThat.Interactions
                 foresightRevealSeconds);
         }
 
-        // Tribute: the target hands over one of their potions (picked at random, since
-        // there is no selection UI yet) and it reappears in the caster's rack.
+        /// <summary>Is the local player the one who owes a potion to a Tribute right now?</summary>
+        public bool IsLocalPlayerPayingTribute =>
+            NetworkManager != null && tributePayer.Value == NetworkManager.LocalClientId;
+
+        /// <summary>True while any player owes a Tribute (everyone else waits).</summary>
+        public bool TributePending => tributePayer.Value != NoPlayer;
+
+        // Tribute: the target hands over one of their potions — THEY choose which, by dropping it
+        // in the play zone exactly as they would cast it. Reusing the ring means no new gesture to
+        // teach, and the payer keeps the real decision the card is about.
         private void ResolveTribute(ulong casterId, ulong targetId)
         {
             int targetSeat = GetSeatIndex(targetId);
-            if (targetSeat < 0)
+            if (targetSeat < 0 || targetId == casterId)
             {
                 SetAnnouncement($"{PlayerLabel(casterId)} demands tribute, but there is nobody to pay it.");
                 return;
             }
 
-            NetworkedPotion[] slots = SlotsForSeat(targetSeat);
+            if (CountPotions(targetSeat) == 0)
+            {
+                SetAnnouncement($"{PlayerLabel(targetId)} has no potions to give.");
+                return;
+            }
+
+            tributePayer.Value = targetId;
+            tributeReceiver.Value = casterId;
+            SetAnnouncement($"{PlayerLabel(casterId)} demands tribute from {PlayerLabel(targetId)} — " +
+                            "drop a potion in the ring to hand it over.");
+            LogCast($"TRIBUTE: {PlayerLabel(targetId)} owes {PlayerLabel(casterId)} a potion.");
+
+            if (tributeRoutine != null)
+            {
+                StopCoroutine(tributeRoutine);
+            }
+            tributeRoutine = StartCoroutine(TributeTimeout(targetId));
+        }
+
+        // An idle or absent payer must not stall the match.
+        private IEnumerator TributeTimeout(ulong payerId)
+        {
+            yield return new WaitForSeconds(Mathf.Max(1f, tributeChoiceSeconds));
+
+            if (tributePayer.Value != payerId)
+            {
+                yield break;
+            }
+
+            int seat = GetSeatIndex(payerId);
+            NetworkedPotion[] slots = SlotsForSeat(seat);
             var filled = new List<int>();
             for (int i = 0; i < slots.Length; i++)
             {
@@ -1643,21 +1819,76 @@ namespace WhoCastThat.Interactions
 
             if (filled.Count == 0)
             {
-                SetAnnouncement($"{PlayerLabel(targetId)} has no potions to give.");
+                LogCast("TRIBUTE timed out with an empty rack — nothing to take.");
+                ClearTribute();
+                SetAnnouncement($"{PlayerLabel(payerId)} has nothing left to give.");
+                yield break;
+            }
+
+            LogCast($"TRIBUTE timed out for {PlayerLabel(payerId)} — taking one at random.");
+            HandOverTribute(slots[filled[UnityEngine.Random.Range(0, filled.Count)]]);
+        }
+
+        // Authority-only: move the chosen potion from the payer's rack to the receiver's.
+        private void HandOverTribute(NetworkedPotion given)
+        {
+            if (given == null)
+            {
+                ClearTribute();
                 return;
             }
 
-            int pick = filled[UnityEngine.Random.Range(0, filled.Count)];
-            NetworkedPotion given = slots[pick];
+            ulong receiver = tributeReceiver.Value;
+            ulong payer = tributePayer.Value;
             PotionType givenType = given.Type;
 
-            slots[pick] = null;
+            int seat = given.RackSeat;
+            int slot = given.RackSlot;
+            if (seat >= 0 && slot >= 0)
+            {
+                NetworkedPotion[] slots = SlotsForSeat(seat);
+                if (slot < slots.Length)
+                {
+                    slots[slot] = null;
+                }
+            }
+
             given.RackSeat = -1;
             given.RackSlot = -1;
             DespawnPotion(given);
 
-            SpawnPotionForPlayer(givenType, casterId, false, null);
-            SetAnnouncement($"{PlayerLabel(targetId)} pays tribute to {PlayerLabel(casterId)}.");
+            ClearTribute();
+
+            if (receiver != NoPlayer)
+            {
+                SpawnPotionForPlayer(givenType, receiver, false, null);
+                SetAnnouncement($"{PlayerLabel(payer)} pays tribute to {PlayerLabel(receiver)}.");
+            }
+        }
+
+        private void ClearTribute()
+        {
+            if (tributeRoutine != null)
+            {
+                StopCoroutine(tributeRoutine);
+                tributeRoutine = null;
+            }
+            tributePayer.Value = NoPlayer;
+            tributeReceiver.Value = NoPlayer;
+        }
+
+        private int CountPotions(int seat)
+        {
+            NetworkedPotion[] slots = SlotsForSeat(seat);
+            int n = 0;
+            for (int i = 0; i < slots.Length; i++)
+            {
+                if (slots[i] != null)
+                {
+                    n++;
+                }
+            }
+            return n;
         }
 
         // ===================== Curse placement (after a Counterspell) =====================

@@ -36,7 +36,7 @@ namespace WhoCastThat.Interactions
                 case PotionType.Hex:
                     return "End your turn. The next mage must take 2 turns in a row. Stacks.";
                 case PotionType.Tribute:
-                    return "The next mage hands you one of their potions.";
+                    return "Look at a mage as you cast. They hand you a potion of their choosing.";
                 case PotionType.Dispel:
                     return "Cancels the spell on the table. Playable out of turn.";
                 case PotionType.Foresight:
