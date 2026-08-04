@@ -80,6 +80,12 @@ namespace WhoCastThat.Interactions
         [Tooltip("Safety cap on how long a Dispel/Reflection chain can get.")]
         [SerializeField] private int maxInterruptChain = 6;
 
+        [Header("Diagnostics")]
+        [Tooltip("Authority-side log of every cast decision and turn change. Turn this on to " +
+                 "find out which branch ran when a turn behaves unexpectedly in a playtest; " +
+                 "the log only appears on the authority's console.")]
+        [SerializeField] private bool logCastDecisions = true;
+
         // ---- Replicated state (authority writes, everyone reads) ----
 
         // Seating, by client id. This is STABLE for the whole match: a player who is
@@ -1271,18 +1277,49 @@ namespace WhoCastThat.Interactions
             // 3) Everything else is a play-phase action on your own turn.
             if (CurrentTurnClientId != casterId)
             {
+                LogCast($"REFUSED {type} from {PlayerLabel(casterId)}: out of turn.");
                 SetAnnouncement($"{PlayerLabel(casterId)} cannot cast out of turn.");
                 RejectPotion(potionId);
                 return;
             }
             if (pendingActive)
             {
+                LogCast($"REFUSED {type} from {PlayerLabel(casterId)}: a spell is still resolving.");
                 RejectPotion(potionId); // wait for the spell already on the table to resolve
                 return;
             }
 
+            // The three answering potions only ever respond to something: a Dispel or Reflection
+            // needs a spell on the table, a Counterspell needs a Curse. Both of those cases are
+            // handled above, so reaching here means there is nothing to answer. Refuse instead of
+            // consuming — CanLocalPlayerCastNow already tells the player these are not castable
+            // right now, and spending the potion for no effect would quietly cost them a card
+            // (and, for a Counterspell, the only thing standing between them and a Curse).
+            if (type == PotionType.Dispel || type == PotionType.Reflection || type == PotionType.Counterspell)
+            {
+                LogCast($"REFUSED {type} from {PlayerLabel(casterId)}: nothing to answer.");
+                SetAnnouncement($"{PlayerLabel(casterId)} has nothing to answer — the {type} is not spent.");
+                RejectPotion(potionId);
+                return;
+            }
+
+            LogCast($"ACCEPTED {type} from {PlayerLabel(casterId)} " +
+                    $"(turnsRemaining={turnsRemaining.Value}, target={PlayerLabel(targetId)}).");
             ConsumePotion(potionId);
             BeginCast(type, casterId, targetId);
+        }
+
+        // Authority-side trace of the cast/turn machinery. The reported "cast worked but my turn
+        // carried on" cannot be pinned down from the code alone, because Tribute, Warp and
+        // Foresight are all SUPPOSED to leave the turn with the caster — only a log from a real
+        // session can say which potion and which branch was involved.
+        private void LogCast(string message)
+        {
+            if (!logCastDecisions)
+            {
+                return;
+            }
+            Debug.Log($"[SpellGame] {message}");
         }
 
         // Put a spell on the table and give everyone else a beat to answer it.
@@ -1305,11 +1342,14 @@ namespace WhoCastThat.Interactions
             // No point stalling the game if nobody can actually answer.
             if (!AnyoneCanInterrupt(casterId))
             {
+                LogCast($"{type}: nobody can answer, resolving immediately.");
                 pendingActive = false;
                 ApplyEffect(type, casterId, targetId);
                 return;
             }
 
+            LogCast($"{type}: interrupt window open for {interruptWindowSeconds}s — " +
+                    "nothing happens until it closes.");
             pendingActive = true;
             interruptWindowOpen.Value = true;
             SetAnnouncement($"{PlayerLabel(casterId)} casts {type} on {PlayerLabel(targetId)} — Dispel or Reflect now!");
@@ -1400,6 +1440,12 @@ namespace WhoCastThat.Interactions
 
         private void ApplyEffect(PotionType type, ulong casterId, ulong targetId)
         {
+            bool endsTurn = type == PotionType.Hex || type == PotionType.Phase;
+            LogCast($"RESOLVE {type} by {PlayerLabel(casterId)} on {PlayerLabel(targetId)} — " +
+                    (endsTurn
+                        ? "this ends the caster's turn."
+                        : "the caster KEEPS the turn and must still draw to end it."));
+
             switch (type)
             {
                 case PotionType.Hex:
@@ -1531,6 +1577,7 @@ namespace WhoCastThat.Interactions
                 stirring.Value = false;
                 brewing = false;
                 drawInProgress = false;
+                LogCast($"TURN HELD: {PlayerLabel(CurrentTurnClientId)} still owes {turnsRemaining.Value}.");
                 SetAnnouncement($"{PlayerLabel(CurrentTurnClientId)} still owes {turnsRemaining.Value} more turn(s)!");
                 return;
             }
@@ -1561,6 +1608,7 @@ namespace WhoCastThat.Interactions
 
             currentTurnIndex.Value = index;
             turnsRemaining.Value = Mathf.Max(1, turns);
+            LogCast($"TURN PASSED to {PlayerLabel(CurrentTurnClientId)} for {turnsRemaining.Value} turn(s).");
             AnnounceCurrentTurn();
         }
 
@@ -1578,6 +1626,7 @@ namespace WhoCastThat.Interactions
             drawInProgress = false;
             currentTurnIndex.Value = index;
             turnsRemaining.Value = Mathf.Max(1, turns);
+            LogCast($"TURN FORCED to {PlayerLabel(playerId)} for {turnsRemaining.Value} turn(s).");
             AnnounceCurrentTurn();
         }
 
