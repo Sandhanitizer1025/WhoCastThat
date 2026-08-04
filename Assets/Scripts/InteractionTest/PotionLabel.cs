@@ -37,8 +37,21 @@ namespace WhoCastThat.Interactions
 
         private TextMeshPro text;
         private Transform panel;
+        private Renderer panelRenderer;
         private Coroutine timedRoutine;
         private Camera billboardTarget;
+
+        /// <summary>
+        /// Recolour the backing panel. Used by the target picker to show which box is selected;
+        /// tooltips and draw banners keep the default.
+        /// </summary>
+        public void SetPanelColor(Color colour)
+        {
+            if (panelRenderer != null && panelRenderer.sharedMaterial != null)
+            {
+                panelRenderer.sharedMaterial.color = colour;
+            }
+        }
 
         /// <summary>Build a label parented to a potion, sitting <paramref name="heightOffset"/> above it.</summary>
         public static PotionLabel Create(Transform parent, float heightOffset)
@@ -72,7 +85,7 @@ namespace WhoCastThat.Interactions
             quad.transform.localScale = new Vector3(PanelWidth, PanelWidth, 1f); // resized to fit in Apply
             panel = quad.transform;
 
-            Renderer panelRenderer = quad.GetComponent<Renderer>();
+            panelRenderer = quad.GetComponent<Renderer>();
             Shader unlit = Shader.Find("Universal Render Pipeline/Unlit");
             if (unlit == null)
             {

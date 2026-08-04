@@ -70,21 +70,6 @@ namespace WhoCastThat.Interactions
         private bool glowVisible;
         private float nextGlowCheck;
 
-        // Where the releasing hand was pointing, captured in OnReleased — see the note there.
-        private Vector3 releaseAimOrigin;
-        private Vector3 releaseAimDirection;
-        private bool hasReleaseAim;
-
-        /// <summary>
-        /// The aim of the hand that last let go of this potion. False if it has never been
-        /// released by an interactor (e.g. it was placed by the authority rather than thrown).
-        /// </summary>
-        public bool TryGetReleaseAim(out Vector3 origin, out Vector3 direction)
-        {
-            origin = releaseAimOrigin;
-            direction = releaseAimDirection;
-            return hasReleaseAim && direction.sqrMagnitude > 1e-6f;
-        }
 
         // Owner-write so the authority can set the type when it spawns the potion.
         private readonly NetworkVariable<int> networkedType = new(
@@ -436,17 +421,6 @@ namespace WhoCastThat.Interactions
 
         private void OnReleased(SelectExitEventArgs args)
         {
-            // Remember where the hand was pointing at the moment of release. Tribute needs to know
-            // which player you were aiming at, and by the time the play zone notices the potion
-            // has landed the interactor is long gone — interactorsSelecting is already empty.
-            if (args.interactorObject != null && args.interactorObject.transform != null)
-            {
-                Transform aim = args.interactorObject.transform;
-                releaseAimOrigin = aim.position;
-                releaseAimDirection = aim.forward;
-                hasReleaseAim = true;
-            }
-
             SetHeldByLocalPlayer(false);
             SetRacked(false);
 

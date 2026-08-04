@@ -80,8 +80,9 @@ namespace WhoCastThat.Interactions
         [Tooltip("Safety cap on how long a Dispel/Reflection chain can get.")]
         [SerializeField] private int maxInterruptChain = 6;
 
-        [Tooltip("How far a Tribute aim ray reaches when picking whose rack you are pointing at.")]
-        [SerializeField] private float aimRange = 6f;
+        [Tooltip("Seconds the caster of a Tribute gets to pick their victim before one is chosen " +
+                 "at random.")]
+        [SerializeField] private float tributeTargetSeconds = 20f;
 
         [Tooltip("Seconds the target of a Tribute gets to choose which potion to hand over " +
                  "before one is taken at random.")]
@@ -137,6 +138,10 @@ namespace WhoCastThat.Interactions
             NoPlayer, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Owner);
 
         private readonly NetworkVariable<ulong> tributeReceiver = new(
+            NoPlayer, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Owner);
+
+        // The Tribute caster while they are still picking a victim.
+        private readonly NetworkVariable<ulong> tributeChooser = new(
             NoPlayer, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Owner);
 
         // Size of the Hex the current player is under, or 0 if they are taking an ordinary turn.
@@ -357,7 +362,9 @@ namespace WhoCastThat.Interactions
 
         private Coroutine cursePlacementRoutine;
         private Coroutine tributeRoutine;
+        private Coroutine tributeTargetRoutine;
         private ForesightDisplay foresightDisplay;
+        private TributeTargetPicker tributePicker;
 
         public override void OnNetworkSpawn()
         {
@@ -423,6 +430,7 @@ namespace WhoCastThat.Interactions
             cursePlacementPlayer.Value = NoPlayer;
             tributePayer.Value = NoPlayer;
             tributeReceiver.Value = NoPlayer;
+            tributeChooser.Value = NoPlayer;
             stirring.Value = false;
             interruptWindowOpen.Value = false;
             brewing = false;
@@ -837,9 +845,9 @@ namespace WhoCastThat.Interactions
             {
                 return false; // a countered Curse has not been put back yet
             }
-            if (TributePending)
+            if (TributePending || TributeTargetPending)
             {
-                return false; // somebody still owes a potion
+                return false; // a Tribute is still being aimed or paid
             }
             if (cursedPlayers.Contains(playerId))
             {
@@ -1247,98 +1255,9 @@ namespace WhoCastThat.Interactions
                 return;
             }
 
-            // Tribute is the one spell where WHO you hit is a decision, so it reads the aim of the
-            // hand that let the potion go. Everything else auto-targets the next player.
-            ulong targetId = potion.Type == PotionType.Tribute
-                ? ResolveAimedPlayer(potion)
-                : ulong.MaxValue;
-
-            RequestCastRpc(potion.Type, NetworkManager.LocalClientId, targetId, netObj.NetworkObjectId);
-        }
-
-        /// <summary>
-        /// Which player is this Tribute aimed at? LOOK at whoever you want to rob while you drop
-        /// the potion in the ring.
-        ///
-        /// Gaze rather than the hand, because the two cannot agree here: the potion only counts as
-        /// cast once it lands in the play zone at the centre of the table, so the hand releasing it
-        /// is necessarily pointing down at the table and never at a rack. The head is free. The
-        /// release aim is still consulted afterwards, so deliberately pointing at a rack — lobbing
-        /// it across the table at someone — also works. Failing both, the authority falls back to
-        /// the next player, so an unaimed Tribute still does something rather than being refused.
-        /// </summary>
-        private ulong ResolveAimedPlayer(NetworkedPotion potion)
-        {
-            Camera view = Camera.main;
-            if (view != null)
-            {
-                ulong looked = RaycastForPlayer(view.transform.position, view.transform.forward);
-                if (looked != ulong.MaxValue)
-                {
-                    return looked;
-                }
-            }
-
-            return AimedPlayerAlong(potion);
-        }
-
-        private ulong AimedPlayerAlong(NetworkedPotion potion)
-        {
-            return potion.TryGetReleaseAim(out Vector3 origin, out Vector3 direction)
-                ? RaycastForPlayer(origin, direction)
-                : ulong.MaxValue;
-        }
-
-        private ulong RaycastForPlayer(Vector3 origin, Vector3 direction)
-        {
-            // Triggers OFF: the play zone's own trigger sits right in front of a player aiming
-            // across the table and would swallow every ray before it reached a rack.
-            bool previous = Physics.queriesHitTriggers;
-            Physics.queriesHitTriggers = false;
-
-            try
-            {
-                if (!Physics.Raycast(origin, direction, out RaycastHit hit, aimRange))
-                {
-                    return ulong.MaxValue;
-                }
-
-                int seat = SeatIndexForTransform(hit.transform);
-                if (seat < 0 || seat >= turnOrder.Count)
-                {
-                    return ulong.MaxValue;
-                }
-
-                ulong candidate = turnOrder[seat];
-                bool self = NetworkManager != null && candidate == NetworkManager.LocalClientId;
-                return (self || eliminated.Contains(candidate)) ? ulong.MaxValue : candidate;
-            }
-            finally
-            {
-                Physics.queriesHitTriggers = previous;
-            }
-        }
-
-        // Racks are meshes with children, so the hit is usually a descendant of the rack root.
-        private int SeatIndexForTransform(Transform hit)
-        {
-            if (seatRacks == null)
-            {
-                return -1;
-            }
-
-            while (hit != null)
-            {
-                for (int i = 0; i < seatRacks.Length; i++)
-                {
-                    if (seatRacks[i] == hit)
-                    {
-                        return i;
-                    }
-                }
-                hit = hit.parent;
-            }
-            return -1;
+            // Tribute's victim is chosen from a picker after the cast resolves, not at release —
+            // see TributeTargetPicker for why aiming cannot work here.
+            RequestCastRpc(potion.Type, NetworkManager.LocalClientId, ulong.MaxValue, netObj.NetworkObjectId);
         }
 
         // Authority-only: look up a submitted potion by its network id.
@@ -1668,7 +1587,9 @@ namespace WhoCastThat.Interactions
                     return; // still their turn
 
                 case PotionType.Tribute:
-                    ResolveTribute(casterId, targetId);
+                    // targetId is ignored: the caster picks their victim from the picker rather
+                    // than it being decided by turn order at cast time.
+                    BeginTributeChoice(casterId);
                     return; // still their turn
 
                 case PotionType.Counterspell:
@@ -1765,9 +1686,130 @@ namespace WhoCastThat.Interactions
         /// <summary>True while any player owes a Tribute (everyone else waits).</summary>
         public bool TributePending => tributePayer.Value != NoPlayer;
 
-        // Tribute: the target hands over one of their potions — THEY choose which, by dropping it
-        // in the play zone exactly as they would cast it. Reusing the ring means no new gesture to
-        // teach, and the payer keeps the real decision the card is about.
+        /// <summary>Is the local player choosing who a Tribute lands on?</summary>
+        public bool IsLocalPlayerChoosingTributeTarget =>
+            NetworkManager != null && tributeChooser.Value == NetworkManager.LocalClientId;
+
+        /// <summary>True while a Tribute caster is still picking their victim.</summary>
+        public bool TributeTargetPending => tributeChooser.Value != NoPlayer;
+
+        // Step 1 of a Tribute: WHO pays. Only players who actually hold something are offered —
+        // robbing an empty rack does nothing and would just waste the card.
+        private void BeginTributeChoice(ulong casterId)
+        {
+            var candidates = new List<ulong>();
+            for (int i = 0; i < turnOrder.Count; i++)
+            {
+                ulong id = turnOrder[i];
+                if (id == casterId || eliminated.Contains(id))
+                {
+                    continue;
+                }
+                if (CountPotions(GetSeatIndex(id)) > 0)
+                {
+                    candidates.Add(id);
+                }
+            }
+
+            if (candidates.Count == 0)
+            {
+                SetAnnouncement($"{PlayerLabel(casterId)} demands tribute, but nobody has a potion to give.");
+                return;
+            }
+
+            // Nothing to choose between with only one candidate — do not make a player confirm
+            // the only option available, which is every 2-player match.
+            if (candidates.Count == 1)
+            {
+                LogCast($"TRIBUTE: only one candidate, skipping the picker.");
+                ResolveTribute(casterId, candidates[0]);
+                return;
+            }
+
+            tributeChooser.Value = casterId;
+            SetAnnouncement($"{PlayerLabel(casterId)} demands tribute — choosing a victim...");
+            LogCast($"TRIBUTE: {PlayerLabel(casterId)} picking from {candidates.Count} candidates.");
+
+            var ids = candidates.ToArray();
+            TributeChoiceRpc(ids, RpcTarget.Single(casterId, RpcTargetUse.Temp));
+
+            if (tributeTargetRoutine != null)
+            {
+                StopCoroutine(tributeTargetRoutine);
+            }
+            tributeTargetRoutine = StartCoroutine(TributeTargetTimeout(casterId, ids));
+        }
+
+        // Shown only to the caster: the row of boxes to look at and trigger. Only the ids go over
+        // the wire — Netcode cannot serialize a string[], and the names are better resolved here
+        // anyway, since PlayerLabel reads the session's own player list on every client.
+        [Rpc(SendTo.SpecifiedInParams)]
+        private void TributeChoiceRpc(ulong[] ids, RpcParams rpcParams)
+        {
+            if (tributePicker == null)
+            {
+                tributePicker = gameObject.AddComponent<TributeTargetPicker>();
+            }
+
+            var names = new string[ids.Length];
+            for (int i = 0; i < ids.Length; i++)
+            {
+                names[i] = PlayerLabel(ids[i]);
+            }
+
+            tributePicker.Show(ids, names, ChooseTributeTarget);
+        }
+
+        /// <summary>Called by the picker once the caster has settled on a victim.</summary>
+        public void ChooseTributeTarget(ulong targetId)
+        {
+            ChooseTributeTargetRpc(NetworkManager.LocalClientId, targetId);
+        }
+
+        [Rpc(SendTo.Authority)]
+        private void ChooseTributeTargetRpc(ulong casterId, ulong targetId)
+        {
+            if (!HasAuthority || tributeChooser.Value != casterId)
+            {
+                return; // not this player's choice to make
+            }
+            if (eliminated.Contains(targetId) || targetId == casterId)
+            {
+                return;
+            }
+
+            ClearTributeChoice();
+            ResolveTribute(casterId, targetId);
+        }
+
+        private IEnumerator TributeTargetTimeout(ulong casterId, ulong[] candidates)
+        {
+            yield return new WaitForSeconds(Mathf.Max(1f, tributeTargetSeconds));
+
+            if (tributeChooser.Value != casterId)
+            {
+                yield break;
+            }
+
+            ulong pick = candidates[UnityEngine.Random.Range(0, candidates.Length)];
+            LogCast($"TRIBUTE target choice timed out for {PlayerLabel(casterId)} — picking at random.");
+            ClearTributeChoice();
+            ResolveTribute(casterId, pick);
+        }
+
+        private void ClearTributeChoice()
+        {
+            if (tributeTargetRoutine != null)
+            {
+                StopCoroutine(tributeTargetRoutine);
+                tributeTargetRoutine = null;
+            }
+            tributeChooser.Value = NoPlayer;
+        }
+
+        // Step 2 of a Tribute: the chosen player hands over one of their potions — THEY choose
+        // which, by dropping it in the play zone exactly as they would cast it. Reusing the ring
+        // means no new gesture to teach, and the payer keeps the real decision the card is about.
         private void ResolveTribute(ulong casterId, ulong targetId)
         {
             int targetSeat = GetSeatIndex(targetId);
