@@ -20,33 +20,45 @@ namespace WhoCastThat.Interactions
     [RequireComponent(typeof(Collider))]
     public class StirZone : MonoBehaviour
     {
-        [Tooltip("Minimum seconds between dips, so one hand-dip starts a single brew.")]
+        [Tooltip("Minimum seconds between draws, so one confirm starts a single brew.")]
         [SerializeField] private float dipCooldown = 1f;
 
         private float nextDipTime;
         private Transform localRig;
 
-        // Hands currently overlapping the pot, and whether we will accept the next one.
+        // Hands currently overlapping the pot.
         private readonly HashSet<Collider> handsInside = new HashSet<Collider>();
         private CauldronOrbit orbit;
-        private bool armed;
+        private XRBaseInputInteractor[] localInteractors;
+
+        /// <summary>
+        /// True while the local player has a hand in the pot and a draw is actually available
+        /// to them. The HUD reads this to prompt for the trigger press.
+        /// </summary>
+        public static bool LocalHandCanDraw { get; private set; }
 
         private void Awake()
         {
             orbit = GetComponentInParent<CauldronOrbit>();
         }
 
-        // The pot orbits to the active player, so it can slide over a hand that was
-        // already resting there — Unity raises OnTriggerEnter for that just the same, and
-        // the round would brew itself the moment the pot arrived. So we only arm once the
-        // pot has settled AND the zone is empty; the dip then has to be a real entry.
+        private void OnDisable()
+        {
+            LocalHandCanDraw = false;
+        }
+
         private void Update()
         {
             handsInside.RemoveWhere(hand => hand == null || !hand.gameObject.activeInHierarchy);
 
-            if (!armed && handsInside.Count == 0 && (orbit == null || orbit.IsSettled))
+            LocalHandCanDraw = handsInside.Count > 0 && DrawAvailable();
+
+            // A trigger press is the ONLY way to draw. Putting a hand in the pot merely offers
+            // the draw — it never takes it. Drawing on contact fired constantly, because the
+            // pot orbits onto the active player's hand and a dropped potion tripped it too.
+            if (LocalHandCanDraw && TriggerPressedThisFrame())
             {
-                armed = true;
+                Draw();
             }
         }
 
@@ -58,31 +70,68 @@ namespace WhoCastThat.Interactions
             }
 
             handsInside.Add(other);
-
-            if (!armed || Time.time < nextDipTime)
-            {
-                return;
-            }
-
-            if (orbit != null && !orbit.IsSettled)
-            {
-                return; // pot is still flying to us
-            }
-
-            NetworkedSpellGame game = NetworkedSpellGame.Instance;
-            if (game == null || !game.IsLocalPlayersTurn || !game.CanBrew)
-            {
-                return;
-            }
-
-            armed = false;
-            nextDipTime = Time.time + dipCooldown;
-            game.RequestBrew();
         }
 
         private void OnTriggerExit(Collider other)
         {
             handsInside.Remove(other);
+        }
+
+        private void Draw()
+        {
+            nextDipTime = Time.time + dipCooldown;
+            NetworkedSpellGame.Instance.RequestBrew();
+        }
+
+        // Everything that must be true before a draw is even offered to the player.
+        private bool DrawAvailable()
+        {
+            if (Time.time < nextDipTime)
+            {
+                return false;
+            }
+
+            if (orbit != null && !orbit.IsSettled)
+            {
+                return false; // pot is still flying to us
+            }
+
+            // Casting and drawing are separate actions and must never happen in one motion.
+            if (NetworkedPotion.LocallyHeldCount > 0)
+            {
+                return false;
+            }
+
+            NetworkedSpellGame game = NetworkedSpellGame.Instance;
+            return game != null && game.IsLocalPlayersTurn && game.CanBrew;
+        }
+
+        // Reads ACTIVATE, not select. Select is the grip (G in the XR Device Simulator) and is
+        // what grabs a potion — driving the draw off it meant the grab button also drew. The
+        // trigger (T in the simulator) maps to activate, which is nothing else's job here.
+        // Only an interactor holding nothing counts, so a potion in hand can never confirm.
+        private bool TriggerPressedThisFrame()
+        {
+            if (localInteractors == null || localInteractors.Length == 0)
+            {
+                localInteractors = FindObjectsByType<XRBaseInputInteractor>(FindObjectsSortMode.None);
+            }
+
+            for (int i = 0; i < localInteractors.Length; i++)
+            {
+                XRBaseInputInteractor interactor = localInteractors[i];
+                if (interactor == null || !interactor.isActiveAndEnabled || interactor.hasSelection)
+                {
+                    continue;
+                }
+
+                if (interactor.activateInput != null && interactor.activateInput.ReadWasPerformedThisFrame())
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
 
         // The avatar hands are networked objects (Player/<hand>/HandCollider): the ones
@@ -92,6 +141,14 @@ namespace WhoCastThat.Interactions
         // where the local hand is a plain (non-networked) collider.
         private bool IsLocalHand(Collider other)
         {
+            // A potion is a locally-owned NetworkObject too, so the ownership test below used
+            // to accept one as a "hand": dropping a potion into the cauldron drew a card.
+            // Nothing that is a potion is ever a hand.
+            if (other.GetComponentInParent<NetworkedPotion>() != null)
+            {
+                return false;
+            }
+
             Unity.Netcode.NetworkObject netObj = other.GetComponentInParent<Unity.Netcode.NetworkObject>();
             if (netObj != null)
             {

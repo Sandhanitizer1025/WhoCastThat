@@ -382,6 +382,9 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   ShowTopMostFoldoutHeaderGroup: 1
   tintRenderer: {fileID: 3101467361965880604}
+  labelHeight: 0.143
+  returnGraceSeconds: 1.5
+  returnFlightSeconds: 0.35
 --- !u!1 &707365076130611540
 GameObject:
   m_ObjectHideFlags: 0
@@ -581,8 +584,8 @@ Transform:
   m_GameObject: {fileID: 5369986086223595934}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: -0.15661496, y: -0.07020134, z: -0.000000008381903}
-  m_LocalScale: {x: 21.156155, y: 34.206337, z: 21.156155}
+  m_LocalPosition: {x: -0.21793868, y: -0.060419425, z: -0.000000011175871}
+  m_LocalScale: {x: 29.44, y: 29.44, z: 29.44}
   m_ConstrainProportionsScale: 0
   m_Children:
   - {fileID: 6552875106115691860}
@@ -725,5 +728,5 @@ BoxCollider:
   m_ProvidesContacts: 0
   m_Enabled: 1
   serializedVersion: 3
-  m_Size: {x: 0.024, y: 0.134, z: 0.024}
+  m_Size: {x: 0.03200582, y: 0.12049233, z: 0.032005854}
   m_Center: {x: 0, y: 0, z: 0}

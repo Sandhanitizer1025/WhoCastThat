@@ -22,6 +22,10 @@ namespace WhoCastThat.Interactions
         [Tooltip("How far in front of the active player the pot floats, measured from the table centre.")]
         [SerializeField] private float radius = 0.45f;
 
+        [Tooltip("Swing the pot this many degrees to one side of the active player, instead of " +
+                 "parking it dead in front of them. 0 = straight ahead, which hides the play zone.")]
+        [SerializeField] private float sideOffsetDegrees = 30f;
+
         [Tooltip("Higher = the pot snaps to the new player faster.")]
         [SerializeField] private float followSpeed = 2.5f;
 
@@ -79,6 +83,16 @@ namespace WhoCastThat.Interactions
                     {
                         dir.Normalize();
                     }
+
+                    // Parked straight in front, the pot sits squarely on the player's line of
+                    // sight to the middle of the table and hides the play zone almost entirely
+                    // — you cannot see where to drop a potion to cast it. Swinging it to one
+                    // side keeps it plainly "yours" and within reach while clearing the view.
+                    if (Mathf.Abs(sideOffsetDegrees) > 0.01f)
+                    {
+                        dir = Quaternion.Euler(0f, sideOffsetDegrees, 0f) * dir;
+                    }
+
                     targetXZ = new Vector3(c.x + dir.x * radius, baseHeight, c.z + dir.z * radius);
                     hasTarget = true;
                 }

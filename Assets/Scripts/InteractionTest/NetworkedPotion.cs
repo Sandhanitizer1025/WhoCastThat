@@ -1,6 +1,9 @@
 using System;
+using System.Collections;
 using Unity.Netcode;
 using UnityEngine;
+using UnityEngine.XR.Interaction.Toolkit;
+using UnityEngine.XR.Interaction.Toolkit.Interactables;
 
 namespace WhoCastThat.Interactions
 {
@@ -20,10 +23,47 @@ namespace WhoCastThat.Interactions
         [Tooltip("The liquid renderer (fake-liquid shader) tinted per potion type via _SideColour/_TopColour.")]
         [SerializeField] private Renderer tintRenderer;
 
+        [Header("Label")]
+        [Tooltip("Height above the potion's centre where the hover tooltip / draw reveal floats.")]
+        [SerializeField] private float labelHeight = 0.11f;
+
+        [Header("Return to rack")]
+        [Tooltip("Grace period after release before the potion snaps home. Must outlast a throw " +
+                 "across the table, or a potion thrown at the play zone is yanked back mid-flight " +
+                 "and the cast never happens.")]
+        [SerializeField] private float returnGraceSeconds = 1.5f;
+
+        [Tooltip("Seconds for a dropped potion to fly back to its rack slot.")]
+        [SerializeField] private float returnFlightSeconds = 0.35f;
+
+        [Header("Castable highlight")]
+        [Tooltip("Glow a potion the local player could legally cast right now — including out " +
+                 "of turn, so a Dispel or Reflection announces itself during someone else's turn.")]
+        [SerializeField] private bool showCastableGlow = true;
+
+        [Tooltip("Colour of the castable glow.")]
+        [SerializeField] private Color castableGlowColor = new(0.55f, 0.95f, 0.65f, 0.28f);
+
+        [Tooltip("How far the glow shell stands off the tube, in metres.")]
+        [SerializeField] private float glowThickness = 0.005f;
+
+        [Tooltip("Seconds between castable re-checks. The answer only changes on turn/curse events.")]
+        [SerializeField] private float glowCheckInterval = 0.15f;
+
         // Fake-liquid shadergraph colour properties.
         private static readonly int SideColourId = Shader.PropertyToID("_SideColour");
         private static readonly int TopColourId = Shader.PropertyToID("_TopColour");
         private MaterialPropertyBlock tintBlock;
+
+        private Rigidbody body;
+        private XRGrabInteractable grab;
+        private PotionLabel label;
+        private Coroutine returnRoutine;
+        private bool hovered;
+
+        private Renderer glowRenderer;
+        private bool glowVisible;
+        private float nextGlowCheck;
 
         // Owner-write so the authority can set the type when it spawns the potion.
         private readonly NetworkVariable<int> networkedType = new(
@@ -31,11 +71,59 @@ namespace WhoCastThat.Interactions
             NetworkVariableReadPermission.Everyone,
             NetworkVariableWritePermission.Owner);
 
+        // Where this potion belongs. Replicated because the player who grabs the potion takes
+        // ownership of it, and it is that player's client which flies it home on a bad drop.
+        private readonly NetworkVariable<Vector3> homePosition = new(
+            Vector3.zero, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Owner);
+
+        private readonly NetworkVariable<Quaternion> homeRotation = new(
+            Quaternion.identity, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Owner);
+
+        private readonly NetworkVariable<bool> homeSet = new(
+            false, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Owner);
+
+        // Which seat's hand this potion belongs to. This has to be replicated: RackSeat below
+        // is authority-only bookkeeping and reads -1 on every other client, so it cannot tell
+        // a client whether the potion it is pointing at is its own.
+        private readonly NetworkVariable<int> ownerSeat = new(
+            -1, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Owner);
+
+        /// <summary>Seat whose hand this potion belongs to, or -1 if unassigned.</summary>
+        public int OwnerSeat => ownerSeat.Value;
+
+        /// <summary>
+        /// How many potions the LOCAL player is holding right now. Grab events only fire on
+        /// the client doing the grabbing, so this is naturally per-client. <see cref="StirZone"/>
+        /// reads it to refuse a dip while a potion is in hand: reaching over the pot to drop a
+        /// potion in the middle of the table would otherwise cast and draw in one motion.
+        /// </summary>
+        public static int LocallyHeldCount { get; private set; }
+
+        // Guards the counter against double-counting, and against leaking a count if the
+        // potion is despawned mid-grab (a cast despawns the potion while it is still held).
+        private bool countedAsHeld;
+
         /// <summary>The spell this potion represents.</summary>
         public PotionType Type => (PotionType)networkedType.Value;
 
         /// <summary>Raised on every client whenever the type is (re)applied.</summary>
         public event Action<PotionType> TypeApplied;
+
+        /// <summary>
+        /// True once this potion has been submitted to the play zone and is awaiting the
+        /// authority's verdict. Stops the zone re-submitting it every frame, and stops the
+        /// magnet yanking it home while the cast is still being judged.
+        /// </summary>
+        public bool CastSubmitted { get; set; }
+
+        // ---- Authority-side rack bookkeeping ----
+        // Only the authority manages racks, so these stay plain (unreplicated) fields.
+
+        /// <summary>Seat whose rack this potion is sitting in, or -1 if not racked.</summary>
+        public int RackSeat { get; set; } = -1;
+
+        /// <summary>Slot index within that rack, or -1 if not racked.</summary>
+        public int RackSlot { get; set; } = -1;
 
         /// <summary>Authority-only: set the potion's type right after spawning it.</summary>
         public void SetType(PotionType type)
@@ -46,15 +134,430 @@ namespace WhoCastThat.Interactions
             }
         }
 
+        /// <summary>Authority-only: record which seat's hand this potion belongs to.</summary>
+        public void SetOwnerSeat(int seat)
+        {
+            if (HasAuthority)
+            {
+                ownerSeat.Value = seat;
+            }
+        }
+
+        /// <summary>
+        /// Is this potion in the local player's own hand? Used to keep a player from reading
+        /// an opponent's potions — hover fires on the pointing player's client regardless of
+        /// whose rack the potion is sitting in.
+        /// </summary>
+        // Kept in one place so the counter can never drift: every path that stops the local
+        // player holding this potion (release, despawn, disable) routes through here.
+        private void SetHeldByLocalPlayer(bool held)
+        {
+            if (held == countedAsHeld)
+            {
+                return;
+            }
+
+            countedAsHeld = held;
+            LocallyHeldCount = Mathf.Max(0, LocallyHeldCount + (held ? 1 : -1));
+        }
+
+        // Re-checked on a slow tick rather than every frame: the answer only changes when the
+        // turn, a curse, or the interrupt window changes, and this runs on every potion on the
+        // table. The stagger from each potion's own spawn time spreads the cost out.
+        private void Update()
+        {
+            if (!showCastableGlow || Time.time < nextGlowCheck)
+            {
+                return;
+            }
+
+            nextGlowCheck = Time.time + Mathf.Max(0.02f, glowCheckInterval);
+
+            NetworkedSpellGame game = NetworkedSpellGame.Instance;
+            bool castable = game != null
+                            && BelongsToLocalPlayer()
+                            && !CastSubmitted
+                            && game.CanLocalPlayerCastNow(Type);
+
+            SetGlow(castable);
+        }
+
+        private void SetGlow(bool on)
+        {
+            if (on == glowVisible)
+            {
+                return;
+            }
+
+            glowVisible = on;
+
+            if (on && glowRenderer == null)
+            {
+                BuildGlow();
+            }
+
+            if (glowRenderer != null)
+            {
+                glowRenderer.gameObject.SetActive(on);
+            }
+        }
+
+        /// <summary>
+        /// A translucent shell just larger than the tube. Built as its own unlit object rather
+        /// than driving emission on the liquid: that material is a bespoke shadergraph
+        /// (_SideColour/_TopColour) with no emission channel to push, so a property block
+        /// would silently do nothing. Swap this for a real outline shader when art lands.
+        /// </summary>
+        private void BuildGlow()
+        {
+            GameObject shell = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+
+            Collider shellCollider = shell.GetComponent<Collider>();
+            if (shellCollider != null)
+            {
+                Destroy(shellCollider); // must never block a grab or the XR ray
+            }
+
+            shell.name = "CastableGlow";
+            shell.transform.SetParent(transform, false);
+            shell.transform.localPosition = Vector3.zero;
+            shell.transform.localRotation = Quaternion.identity;
+
+            // Sized off the collider so it keeps fitting if the tube is ever re-scaled. The
+            // cylinder primitive is 1 unit across and 2 tall, hence the half-height on Y.
+            float diameter = 0.032f;
+            float height = 0.1205f;
+            if (GetComponent<Collider>() is BoxCollider box)
+            {
+                diameter = Mathf.Max(box.size.x, box.size.z);
+                height = box.size.y;
+            }
+
+            shell.transform.localScale = new Vector3(
+                diameter + (glowThickness * 2f),
+                (height * 0.5f) + glowThickness,
+                diameter + (glowThickness * 2f));
+
+            var renderer = shell.GetComponent<Renderer>();
+            Shader unlit = Shader.Find("Universal Render Pipeline/Unlit");
+            if (unlit == null)
+            {
+                unlit = Shader.Find("Unlit/Color");
+            }
+
+            if (unlit != null)
+            {
+                var mat = new Material(unlit);
+                mat.SetFloat("_Surface", 1f); // transparent
+                mat.SetFloat("_Blend", 0f);   // alpha blend
+                mat.SetFloat("_ZWrite", 0f);
+                mat.renderQueue = (int)UnityEngine.Rendering.RenderQueue.Transparent;
+                mat.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
+                mat.color = castableGlowColor;
+                renderer.sharedMaterial = mat;
+            }
+
+            renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            renderer.receiveShadows = false;
+            glowRenderer = renderer;
+        }
+
+        private bool BelongsToLocalPlayer()
+        {
+            NetworkedSpellGame game = NetworkedSpellGame.Instance;
+            if (game == null)
+            {
+                return false;
+            }
+
+            int localSeat = game.LocalSeatIndex;
+            return localSeat >= 0 && ownerSeat.Value == localSeat;
+        }
+
+        /// <summary>Authority-only: record the rack slot this potion returns to when dropped.</summary>
+        public void SetHome(Vector3 position, Quaternion rotation)
+        {
+            if (!HasAuthority)
+            {
+                return;
+            }
+
+            homePosition.Value = position;
+            homeRotation.Value = rotation;
+            homeSet.Value = true;
+        }
+
+        private void Awake()
+        {
+            body = GetComponent<Rigidbody>();
+            grab = GetComponent<XRGrabInteractable>();
+        }
+
         public override void OnNetworkSpawn()
         {
             networkedType.OnValueChanged += OnTypeChanged;
+
+            if (grab != null)
+            {
+                // A racked potion is frozen (see SetRacked). Grabbing it must always hand it
+                // back to physics, otherwise XRGrabInteractable restores the kinematic flag it
+                // cached on the first grab and the potion hangs in mid-air when released.
+                grab.selectEntered.AddListener(OnGrabbed);
+                grab.selectExited.AddListener(OnReleased);
+
+                // Hover fires only for the LOCAL player's interactors, so the tooltip is only
+                // ever seen by whoever is pointing. That alone does NOT make it private
+                // though — pointing at an opponent's rack still fires it — so OnHoverEntered
+                // additionally checks the potion is one of yours.
+                grab.hoverEntered.AddListener(OnHoverEntered);
+                grab.hoverExited.AddListener(OnHoverExited);
+            }
+
             ApplyVisual();
         }
 
         public override void OnNetworkDespawn()
         {
+            // A cast despawns the potion while it is still in the player's hand, so the held
+            // count has to be released here as well as on a normal drop.
+            SetHeldByLocalPlayer(false);
+
             networkedType.OnValueChanged -= OnTypeChanged;
+
+            if (grab != null)
+            {
+                grab.selectEntered.RemoveListener(OnGrabbed);
+                grab.selectExited.RemoveListener(OnReleased);
+                grab.hoverEntered.RemoveListener(OnHoverEntered);
+                grab.hoverExited.RemoveListener(OnHoverExited);
+            }
+
+            // Let the authority free the rack slot this potion was occupying.
+            if (NetworkedSpellGame.Instance != null)
+            {
+                NetworkedSpellGame.Instance.NotifyPotionDespawned(this);
+            }
+        }
+
+        // ---- Label ----
+
+        private PotionLabel Label()
+        {
+            if (label == null)
+            {
+                label = PotionLabel.Create(transform, labelHeight);
+            }
+            return label;
+        }
+
+        private void OnHoverEntered(HoverEnterEventArgs args)
+        {
+            // Your own potions only. Hover fires on whichever client is pointing, so without
+            // this a player could sweep a ray across an opponent's rack and read their hand.
+            if (!BelongsToLocalPlayer())
+            {
+                return;
+            }
+
+            hovered = true;
+            Label().Show(PotionInfo.Tooltip(Type));
+        }
+
+        private void OnHoverExited(HoverExitEventArgs args)
+        {
+            hovered = false;
+            Label().Hide();
+        }
+
+        /// <summary>
+        /// Show everyone what was just brewed. Called by the authority while the potion hangs
+        /// over the cauldron, before it floats to the rack.
+        ///
+        /// The type is passed explicitly rather than read from <see cref="Type"/>: the RPC and
+        /// the type's NetworkVariable update are separate messages with no guaranteed ordering,
+        /// so a client could otherwise render the reveal for the previous/default type.
+        /// </summary>
+        [Rpc(SendTo.Everyone)]
+        public void RevealRpc(int potionType, float seconds)
+        {
+            Label().ShowFor(PotionInfo.DrawBanner((PotionType)potionType), seconds);
+        }
+
+        // ---- Grab / release ----
+
+        private void OnGrabbed(SelectEnterEventArgs args)
+        {
+            SetHeldByLocalPlayer(true);
+            CastSubmitted = false;
+            if (returnRoutine != null)
+            {
+                StopCoroutine(returnRoutine);
+                returnRoutine = null;
+            }
+            SetRacked(false);
+        }
+
+        private void OnReleased(SelectExitEventArgs args)
+        {
+            SetHeldByLocalPlayer(false);
+            SetRacked(false);
+
+            if (returnRoutine != null)
+            {
+                StopCoroutine(returnRoutine);
+            }
+            returnRoutine = StartCoroutine(ReturnHomeUnlessPlayed());
+        }
+
+        /// <summary>
+        /// Authority-only: the cast was rejected (wrong turn, nothing to answer), so send the
+        /// potion back rather than destroying it. Routed to the owner because that is the
+        /// client currently driving the potion's transform.
+        /// </summary>
+        [Rpc(SendTo.Owner)]
+        public void ReturnHomeRpc()
+        {
+            CastSubmitted = false;
+            if (returnRoutine != null)
+            {
+                StopCoroutine(returnRoutine);
+            }
+            returnRoutine = StartCoroutine(FlyHome());
+        }
+
+        // A potion dropped anywhere other than the play zone belongs back in its rack. Without
+        // this, a fumbled grab throws it onto the floor and the player has silently lost a card
+        // they can never retrieve (racks are out of reach once seated).
+        private IEnumerator ReturnHomeUnlessPlayed()
+        {
+            float elapsed = 0f;
+            while (elapsed < returnGraceSeconds)
+            {
+                elapsed += Time.deltaTime;
+                if (!IsSpawned)
+                {
+                    yield break;
+                }
+                yield return null;
+            }
+
+            // Being cast, or already judged and awaiting despawn — leave it alone.
+            if (CastSubmitted)
+            {
+                yield break;
+            }
+            if (PlayZone.Instance != null && PlayZone.Instance.Contains(this))
+            {
+                yield break;
+            }
+
+            yield return FlyHome();
+        }
+
+        private IEnumerator FlyHome()
+        {
+            if (!homeSet.Value)
+            {
+                yield break; // never seated (e.g. spawned loose) — nothing to return to
+            }
+
+            Vector3 from = transform.position;
+            Quaternion fromRot = transform.rotation;
+            Vector3 to = homePosition.Value;
+            Quaternion toRot = homeRotation.Value;
+
+            if (body != null)
+            {
+                // Zero the velocities BEFORE going kinematic: a kinematic body rejects velocity
+                // writes and Unity logs an error for each one, which spammed the console on
+                // every magnet return. Same order as SetRacked below.
+                body.linearVelocity = Vector3.zero;
+                body.angularVelocity = Vector3.zero;
+                body.isKinematic = true;
+            }
+
+            float elapsed = 0f;
+            float duration = Mathf.Max(0.05f, returnFlightSeconds);
+            while (elapsed < duration)
+            {
+                elapsed += Time.deltaTime;
+                float u = Mathf.Clamp01(elapsed / duration);
+                float eased = u * u * (3f - 2f * u); // smoothstep
+
+                transform.position = Vector3.Lerp(from, to, eased);
+                transform.rotation = Quaternion.Slerp(fromRot, toRot, eased);
+                if (body != null)
+                {
+                    body.position = transform.position;
+                }
+                yield return null;
+            }
+
+            transform.position = to;
+            transform.rotation = toRot;
+            if (body != null)
+            {
+                body.position = to;
+            }
+
+            SetRacked(true);
+            returnRoutine = null;
+        }
+
+        /// <summary>
+        /// Freeze a potion that is seated in a rack slot.
+        ///
+        /// The rack's slots are deep wells (~0.18 m) and the tube is only ~0.12 m tall, so
+        /// a potion resting on the well floor is swallowed completely out of sight. Instead
+        /// the game seats it high in the well — protruding above the rim where it can be
+        /// seen and grabbed — and freezes it there. This also stops racked potions being
+        /// knocked over or vibrating against their neighbours.
+        /// </summary>
+        public void SetRacked(bool racked)
+        {
+            if (body == null)
+            {
+                return;
+            }
+
+            if (racked)
+            {
+                body.linearVelocity = Vector3.zero;
+                body.angularVelocity = Vector3.zero;
+                body.useGravity = false;
+                body.isKinematic = true;
+            }
+            else
+            {
+                if (body.isKinematic)
+                {
+                    body.isKinematic = false;
+                    // Kinematic position-writes leave implicit velocity behind; clearing it
+                    // stops the potion being flung the instant physics takes back over.
+                    body.linearVelocity = Vector3.zero;
+                    body.angularVelocity = Vector3.zero;
+                }
+                body.useGravity = true;
+
+                // RackSeat/RackSlot deliberately survive a grab: the slot stays reserved
+                // while the player is holding the potion, and is only released when the
+                // potion actually despawns (i.e. it was cast). Clearing it here would leak
+                // the slot and slowly shrink the player's usable rack.
+            }
+        }
+
+        /// <summary>
+        /// Ask this potion's owner to despawn it. Used when the authority needs to remove a
+        /// potion it does not own (e.g. a potion a player has grabbed).
+        /// </summary>
+        [Rpc(SendTo.Owner)]
+        public void DespawnRpc()
+        {
+            NetworkObject netObj = NetworkObject;
+            if (netObj != null && netObj.IsSpawned && netObj.IsOwner)
+            {
+                netObj.Despawn();
+            }
         }
 
         private void OnTypeChanged(int previous, int current)
@@ -75,6 +578,13 @@ namespace WhoCastThat.Interactions
                 tintBlock.SetColor(TopColourId, c);
                 tintRenderer.SetPropertyBlock(tintBlock);
             }
+
+            // Keep an open tooltip in step if the type replicates late.
+            if (hovered && label != null)
+            {
+                label.Show(PotionInfo.Tooltip(Type));
+            }
+
             TypeApplied?.Invoke(Type);
         }
 
