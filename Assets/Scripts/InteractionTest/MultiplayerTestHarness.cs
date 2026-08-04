@@ -75,6 +75,19 @@ namespace WhoCastThat.Interactions
                 return;
             }
 
+            // While a countered Curse is waiting to be put back, the digits pick where it lands
+            // rather than casting — casting is blocked during placement anyway, so there is no
+            // ambiguity, and it saves burning four more simulator-safe keys.
+            NetworkedSpellGame game = NetworkedSpellGame.Instance;
+            if (game != null && game.IsLocalPlayerPlacingCurse)
+            {
+                if (kb.digit1Key.wasPressedThisFrame) game.ChooseCursePlacement(0);
+                if (kb.digit2Key.wasPressedThisFrame) game.ChooseCursePlacement(1);
+                if (kb.digit3Key.wasPressedThisFrame) game.ChooseCursePlacement(2);
+                if (kb.digit4Key.wasPressedThisFrame) game.ChooseCursePlacement(NetworkedSpellGame.RandomPlacement);
+                return;
+            }
+
             if (kb.cKey.wasPressedThisFrame) Connect();
             if (kb.dKey.wasPressedThisFrame) Draw();
             if (kb.digit1Key.wasPressedThisFrame) Cast(PotionType.Hex);

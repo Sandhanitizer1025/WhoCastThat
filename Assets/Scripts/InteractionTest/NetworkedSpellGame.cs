@@ -80,6 +80,10 @@ namespace WhoCastThat.Interactions
         [Tooltip("Safety cap on how long a Dispel/Reflection chain can get.")]
         [SerializeField] private int maxInterruptChain = 6;
 
+        [Tooltip("Seconds a player gets to choose where a countered Curse goes back into the deck " +
+                 "before it is placed at random for them. Stops a match stalling on an idle player.")]
+        [SerializeField] private float cursePlacementSeconds = 15f;
+
         [Header("Diagnostics")]
         [Tooltip("Authority-side log of every cast decision and turn change. Turn this on to " +
                  "find out which branch ran when a turn behaves unexpectedly in a playtest; " +
@@ -101,6 +105,14 @@ namespace WhoCastThat.Interactions
         // Turns the current player still owes (Hex/attack stacking makes this > 1).
         private readonly NetworkVariable<int> turnsRemaining = new(
             1, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Owner);
+
+        private const ulong NoPlayer = ulong.MaxValue;
+
+        // Whose Counterspell is waiting on a "where does the Curse go?" choice, or NoPlayer.
+        // Replicated so the chooser's own client can offer the choice and everyone else can be
+        // told to wait, and so the turn cannot pass until the Curse has actually been placed.
+        private readonly NetworkVariable<ulong> cursePlacementPlayer = new(
+            NoPlayer, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Owner);
 
         // Size of the Hex the current player is under, or 0 if they are taking an ordinary turn.
         // This CANNOT be derived from turnsRemaining: a normal turn and the final owed turn of an
@@ -309,6 +321,11 @@ namespace WhoCastThat.Interactions
         private bool pendingActive;
         private Coroutine windowRoutine;
 
+        /// <summary>Pass to <see cref="ChooseCursePlacement"/> to bury the Curse at random.</summary>
+        public const int RandomPlacement = 3;
+
+        private Coroutine cursePlacementRoutine;
+
         public override void OnNetworkSpawn()
         {
             Instance = this;
@@ -365,9 +382,12 @@ namespace WhoCastThat.Interactions
 
             SyncSeatingWithConnectedClients();
 
-            currentTurnIndex.Value = 0;
+            // "Randomly decide the starting player" — this used to always be seat 0, which handed
+            // the same player the first move (and the first Curse risk) every single match.
+            currentTurnIndex.Value = turnOrder.Count > 0 ? UnityEngine.Random.Range(0, turnOrder.Count) : 0;
             turnsRemaining.Value = 1;
             hexAttackSize.Value = 0;
+            cursePlacementPlayer.Value = NoPlayer;
             stirring.Value = false;
             interruptWindowOpen.Value = false;
             brewing = false;
@@ -777,6 +797,10 @@ namespace WhoCastThat.Interactions
             if (pendingActive)
             {
                 return false; // a spell is still resolving
+            }
+            if (CursePlacementPending)
+            {
+                return false; // a countered Curse has not been put back yet
             }
             if (cursedPlayers.Contains(playerId))
             {
@@ -1275,10 +1299,8 @@ namespace WhoCastThat.Interactions
                 {
                     ConsumePotion(potionId);
                     RemoveCurse(casterId);
-                    deck.Add(PotionType.Curse);
-                    ShuffleDeck();
-                    SetAnnouncement($"{PlayerLabel(casterId)} countered the curse! It is back in the cauldron.");
-                    EndTurnAfterAction();
+                    LogCast($"COUNTERSPELL by {PlayerLabel(casterId)} — awaiting Curse placement.");
+                    BeginCursePlacement(casterId);
                 }
                 else
                 {
@@ -1609,6 +1631,88 @@ namespace WhoCastThat.Interactions
 
             SpawnPotionForPlayer(givenType, casterId, false, null);
             SetAnnouncement($"{PlayerLabel(targetId)} pays tribute to {PlayerLabel(casterId)}.");
+        }
+
+        // ===================== Curse placement (after a Counterspell) =====================
+
+        /// <summary>Is the local player the one choosing where a countered Curse goes back?</summary>
+        public bool IsLocalPlayerPlacingCurse =>
+            NetworkManager != null && cursePlacementPlayer.Value == NetworkManager.LocalClientId;
+
+        /// <summary>True while any player is choosing a Curse placement (everyone else waits).</summary>
+        public bool CursePlacementPending => cursePlacementPlayer.Value != NoPlayer;
+
+        /// <summary>
+        /// Countering a Curse used to drop it back and reshuffle the whole deck, which threw away
+        /// the most interesting decision in the game — burying it or dropping it right on top of
+        /// the next player — and randomised the deck order that Foresight depends on. The player
+        /// now chooses, and the turn does not pass until they have.
+        /// </summary>
+        private void BeginCursePlacement(ulong playerId)
+        {
+            cursePlacementPlayer.Value = playerId;
+            SetAnnouncement($"{PlayerLabel(playerId)} countered the Curse! Choose where it goes back: " +
+                            "top, 2nd, 3rd, or lost in the cauldron.");
+
+            if (cursePlacementRoutine != null)
+            {
+                StopCoroutine(cursePlacementRoutine);
+            }
+            cursePlacementRoutine = StartCoroutine(CursePlacementTimeout(playerId));
+        }
+
+        // A player who never answers must not stall the match.
+        private IEnumerator CursePlacementTimeout(ulong playerId)
+        {
+            yield return new WaitForSeconds(Mathf.Max(1f, cursePlacementSeconds));
+
+            if (cursePlacementPlayer.Value == playerId)
+            {
+                LogCast($"Curse placement timed out for {PlayerLabel(playerId)} — placing at random.");
+                CompleteCursePlacement(playerId, RandomPlacement);
+            }
+        }
+
+        /// <summary>
+        /// Choose where the countered Curse is returned: 0 = top (the very next draw), 1 = second,
+        /// 2 = third, or <see cref="RandomPlacement"/> for anywhere in the deck.
+        /// </summary>
+        public void ChooseCursePlacement(int choice)
+        {
+            ChooseCursePlacementRpc(NetworkManager.LocalClientId, choice);
+        }
+
+        [Rpc(SendTo.Authority)]
+        private void ChooseCursePlacementRpc(ulong playerId, int choice)
+        {
+            if (!HasAuthority || cursePlacementPlayer.Value != playerId)
+            {
+                return; // not this player's choice to make
+            }
+            CompleteCursePlacement(playerId, choice);
+        }
+
+        private void CompleteCursePlacement(ulong playerId, int choice)
+        {
+            if (cursePlacementRoutine != null)
+            {
+                StopCoroutine(cursePlacementRoutine);
+                cursePlacementRoutine = null;
+            }
+            cursePlacementPlayer.Value = NoPlayer;
+
+            // Clamped, because the deck can be shorter than the requested depth late in a match.
+            int index = (choice >= 0 && choice <= 2)
+                ? Mathf.Min(choice, deck.Count)
+                : UnityEngine.Random.Range(0, deck.Count + 1);
+
+            deck.Insert(index, PotionType.Curse);
+            LogCast($"Curse placed at index {index} of {deck.Count} by {PlayerLabel(playerId)}.");
+
+            // The announcement deliberately does NOT say where it went — only the player who
+            // placed it should know that. The authority log above is for debugging, not players.
+            SetAnnouncement($"{PlayerLabel(playerId)} slips the Curse back into the cauldron...");
+            EndTurnAfterAction();
         }
 
         // ===================== Turn + elimination =====================
