@@ -29,6 +29,9 @@ namespace WhoCastThat.Interactions
     ///  - Authority checks use <see cref="NetworkBehaviour.HasAuthority"/>.
     ///  - Client -> authority requests use <c>[Rpc(SendTo.Authority)]</c>.
     ///  - Replicated state uses Owner-write / Everyone-read NetworkVariables.
+    ///  - An authority RPC NEVER takes the acting player's id as an argument. It reads
+    ///    <c>RpcParams.Receive.SenderClientId</c>, which the transport fills in and a client
+    ///    cannot forge. Passing the id let any client act as any other player.
     /// Place this on a NetworkObject in the scene and register the prefab/scene
     /// object with the Network Manager. UI subscribes to the static events.
     /// </summary>
@@ -762,12 +765,13 @@ namespace WhoCastThat.Interactions
         /// </summary>
         public void RequestDraw()
         {
-            RequestDrawRpc(NetworkManager.LocalClientId);
+            RequestDrawRpc();
         }
 
         [Rpc(SendTo.Authority)]
-        private void RequestDrawRpc(ulong playerId)
+        private void RequestDrawRpc(RpcParams rpcParams = default)
         {
+            ulong playerId = rpcParams.Receive.SenderClientId;
             if (brewing || !CanPlayerDraw(playerId))
             {
                 return;
@@ -784,12 +788,13 @@ namespace WhoCastThat.Interactions
         /// </summary>
         public void RequestBrew()
         {
-            RequestBrewRpc(NetworkManager.LocalClientId);
+            RequestBrewRpc();
         }
 
         [Rpc(SendTo.Authority)]
-        private void RequestBrewRpc(ulong playerId)
+        private void RequestBrewRpc(RpcParams rpcParams = default)
         {
+            ulong playerId = rpcParams.Receive.SenderClientId;
             if (brewing || !CanPlayerDraw(playerId))
             {
                 return; // already brewing, or not a legal draw right now
@@ -1227,13 +1232,13 @@ namespace WhoCastThat.Interactions
         /// <summary>Cast at an explicit target (used by the keyboard test harness).</summary>
         public void RequestCast(PotionType type, ulong targetId)
         {
-            RequestCastRpc(type, NetworkManager.LocalClientId, targetId, NoPotion);
+            RequestCastRpc(type, targetId, NoPotion);
         }
 
         /// <summary>Cast targeting the next player automatically (used by the keyboard test harness).</summary>
         public void RequestCast(PotionType type)
         {
-            RequestCastRpc(type, NetworkManager.LocalClientId, ulong.MaxValue, NoPotion);
+            RequestCastRpc(type, ulong.MaxValue, NoPotion);
         }
 
         /// <summary>
@@ -1257,7 +1262,7 @@ namespace WhoCastThat.Interactions
 
             // Tribute's victim is chosen from a picker after the cast resolves, not at release —
             // see TributeTargetPicker for why aiming cannot work here.
-            RequestCastRpc(potion.Type, NetworkManager.LocalClientId, ulong.MaxValue, netObj.NetworkObjectId);
+            RequestCastRpc(potion.Type, ulong.MaxValue, netObj.NetworkObjectId);
         }
 
         // Authority-only: look up a submitted potion by its network id.
@@ -1300,12 +1305,13 @@ namespace WhoCastThat.Interactions
         /// </summary>
         public void DebugDrawCurse()
         {
-            DebugDrawCurseRpc(NetworkManager.LocalClientId);
+            DebugDrawCurseRpc();
         }
 
         [Rpc(SendTo.Authority)]
-        private void DebugDrawCurseRpc(ulong playerId)
+        private void DebugDrawCurseRpc(RpcParams rpcParams = default)
         {
+            ulong playerId = rpcParams.Receive.SenderClientId;
             if (!HasAuthority || !gameActive.Value)
             {
                 return;
@@ -1325,8 +1331,12 @@ namespace WhoCastThat.Interactions
         }
 
         [Rpc(SendTo.Authority)]
-        private void RequestCastRpc(PotionType type, ulong casterId, ulong targetId, ulong potionId)
+        private void RequestCastRpc(PotionType type, ulong targetId, ulong potionId,
+                                    RpcParams rpcParams = default)
         {
+            // The caster is whoever actually sent this, per the transport — never a value the
+            // sender supplied. Taking it from an argument let any client cast as any player.
+            ulong casterId = rpcParams.Receive.SenderClientId;
             if (!HasAuthority || !gameActive.Value || eliminated.Contains(casterId))
             {
                 RejectPotion(potionId);
@@ -1763,12 +1773,13 @@ namespace WhoCastThat.Interactions
         /// <summary>Called by the picker once the caster has settled on a victim.</summary>
         public void ChooseTributeTarget(ulong targetId)
         {
-            ChooseTributeTargetRpc(NetworkManager.LocalClientId, targetId);
+            ChooseTributeTargetRpc(targetId);
         }
 
         [Rpc(SendTo.Authority)]
-        private void ChooseTributeTargetRpc(ulong casterId, ulong targetId)
+        private void ChooseTributeTargetRpc(ulong targetId, RpcParams rpcParams = default)
         {
+            ulong casterId = rpcParams.Receive.SenderClientId;
             if (!HasAuthority || tributeChooser.Value != casterId)
             {
                 return; // not this player's choice to make
@@ -1979,12 +1990,13 @@ namespace WhoCastThat.Interactions
         /// </summary>
         public void ChooseCursePlacement(int choice)
         {
-            ChooseCursePlacementRpc(NetworkManager.LocalClientId, choice);
+            ChooseCursePlacementRpc(choice);
         }
 
         [Rpc(SendTo.Authority)]
-        private void ChooseCursePlacementRpc(ulong playerId, int choice)
+        private void ChooseCursePlacementRpc(int choice, RpcParams rpcParams = default)
         {
+            ulong playerId = rpcParams.Receive.SenderClientId;
             if (!HasAuthority || cursePlacementPlayer.Value != playerId)
             {
                 return; // not this player's choice to make
