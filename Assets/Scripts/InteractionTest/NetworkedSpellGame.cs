@@ -104,6 +104,17 @@ namespace WhoCastThat.Interactions
                  "the log only appears on the authority's console.")]
         [SerializeField] private bool logCastDecisions = true;
 
+        [Tooltip("Show the Tribute victim picker even when there is only one candidate. The " +
+                 "picker normally needs 3+ players, so on a machine that cannot run three " +
+                 "clones smoothly it never appears and cannot be tested. Leave OFF for real " +
+                 "play: it makes every 2-player Tribute a pointless confirmation step.")]
+        [SerializeField] private bool alwaysShowTributePicker = false;
+
+        [Tooltip("Seconds a dropped player's seat is held open before they are eliminated for " +
+                 "good. Until it expires their turn is skipped but no winner is declared, so a " +
+                 "brief network blip no longer ends a 2-player match outright.")]
+        [SerializeField] private float disconnectGraceSeconds = 45f;
+
         // ---- Replicated state (authority writes, everyone reads) ----
 
         // Seating, by client id. This is STABLE for the whole match: a player who is
@@ -339,6 +350,12 @@ namespace WhoCastThat.Interactions
         private readonly HashSet<ulong> cursedPlayers = new();
         private readonly HashSet<ulong> eliminated = new();
 
+        // Seated players whose connection has dropped but whose seat is being held open. They are
+        // deliberately NOT in `eliminated`, so ActivePlayerCount still counts them and no winner is
+        // declared while somebody is merely reconnecting.
+        private readonly HashSet<ulong> dormant = new();
+        private readonly Dictionary<ulong, Coroutine> dormantTimers = new();
+
         // Which potion is sitting in which rack slot, per seat. A slot stays reserved while
         // its potion is held by a player, and is released when the potion despawns.
         private readonly Dictionary<int, NetworkedPotion[]> rackSlots = new();
@@ -442,6 +459,7 @@ namespace WhoCastThat.Interactions
             lastResolvedSpell.Value = NoSpell;
             ClearCurses();
             eliminated.Clear();
+            ClearAllDormant();
 
             ClearAllPotions();
             rackSlots.Clear();
@@ -521,13 +539,26 @@ namespace WhoCastThat.Interactions
                 return;
             }
 
+            // A player who drops mid-match is held dormant, not eliminated. Eliminating them
+            // immediately meant ANY disconnect in a 2-player match instantly declared the other
+            // player the winner — the match was over before anyone noticed the drop.
             for (int i = 0; i < turnOrder.Count; i++)
             {
                 ulong id = turnOrder[i];
                 if (!connected.Contains(id) && !eliminated.Contains(id))
                 {
-                    eliminated.Add(id);
-                    RemoveCurse(id);
+                    MarkDormant(id);
+                }
+            }
+
+            // Anyone dormant who is connected again is back in play.
+            for (int i = 0; i < turnOrder.Count; i++)
+            {
+                ulong id = turnOrder[i];
+                if (connected.Contains(id) && dormant.Contains(id))
+                {
+                    ClearDormant(id);
+                    SetAnnouncement($"{PlayerLabel(id)} is back.");
                 }
             }
 
@@ -565,6 +596,9 @@ namespace WhoCastThat.Interactions
 
                 ulong departed = turnOrder[vacant];
                 eliminated.Remove(departed);
+                // Their grace timer must die with the seat, or it would later "eliminate" an id
+                // that now belongs to whoever took the seat over.
+                ClearDormant(departed);
                 RemoveCurse(departed);
                 ClearSeatPotions(vacant); // the ghost's hand goes with them
 
@@ -1729,7 +1763,9 @@ namespace WhoCastThat.Interactions
 
             // Nothing to choose between with only one candidate — do not make a player confirm
             // the only option available, which is every 2-player match.
-            if (candidates.Count == 1)
+            // alwaysShowTributePicker overrides this: the picker needs 3+ players to appear at
+            // all, and a machine that cannot run three clones without lagging can never see it.
+            if (candidates.Count == 1 && !alwaysShowTributePicker)
             {
                 LogCast($"TRIBUTE: only one candidate, skipping the picker.");
                 ResolveTribute(casterId, candidates[0]);
@@ -2065,13 +2101,32 @@ namespace WhoCastThat.Interactions
             brewing = false;
             drawInProgress = false;
 
+            // Prefer someone who is actually here: skip both eliminated and dormant seats.
             int index = currentTurnIndex.Value;
+            bool found = false;
             for (int step = 0; step < turnOrder.Count; step++)
             {
                 index = (index + 1) % turnOrder.Count;
-                if (!eliminated.Contains(turnOrder[index]))
+                ulong id = turnOrder[index];
+                if (!eliminated.Contains(id) && !dormant.Contains(id))
                 {
+                    found = true;
                     break;
+                }
+            }
+
+            // Everyone still in the match is dormant. Rather than stall, hand the turn to the
+            // first player who has not been eliminated; the grace timers will resolve the match.
+            if (!found)
+            {
+                index = currentTurnIndex.Value;
+                for (int step = 0; step < turnOrder.Count; step++)
+                {
+                    index = (index + 1) % turnOrder.Count;
+                    if (!eliminated.Contains(turnOrder[index]))
+                    {
+                        break;
+                    }
                 }
             }
 
@@ -2084,8 +2139,9 @@ namespace WhoCastThat.Interactions
 
         private void MoveToPlayer(ulong playerId, int turns)
         {
+            // A Hex aimed at someone who has dropped would stall the match on an empty seat.
             int index = IndexOfPlayer(playerId);
-            if (index < 0 || eliminated.Contains(playerId))
+            if (index < 0 || eliminated.Contains(playerId) || dormant.Contains(playerId))
             {
                 MoveToNextPlayer(1);
                 return;
@@ -2100,6 +2156,78 @@ namespace WhoCastThat.Interactions
             LogCast($"TURN FORCED to {PlayerLabel(playerId)} for {turnsRemaining.Value} turn(s) " +
                     $"(hex attack size {hexAttackSize.Value}).");
             AnnounceCurrentTurn();
+        }
+
+        /// <summary>
+        /// Hold a dropped player's seat open. Their rack is untouched (potions are spawned by the
+        /// authority, so they do not leave with the client), their turn is skipped, and the win
+        /// check still counts them — so nobody wins by outlasting a network blip.
+        /// </summary>
+        private void MarkDormant(ulong playerId)
+        {
+            if (dormant.Contains(playerId) || eliminated.Contains(playerId))
+            {
+                return;
+            }
+
+            dormant.Add(playerId);
+            RemoveCurse(playerId); // they cannot answer a Curse while gone
+            LogCast($"DROPPED: {PlayerLabel(playerId)} — holding their seat for {disconnectGraceSeconds}s.");
+            SetAnnouncement($"{PlayerLabel(playerId)} lost connection — holding their seat...");
+
+            if (dormantTimers.TryGetValue(playerId, out Coroutine existing) && existing != null)
+            {
+                StopCoroutine(existing);
+            }
+            dormantTimers[playerId] = StartCoroutine(DormantTimeout(playerId));
+
+            // If it was their turn, play must move on or the match stalls on an absent player.
+            if (CurrentTurnClientId == playerId)
+            {
+                MoveToNextPlayer(1);
+            }
+        }
+
+        private void ClearAllDormant()
+        {
+            foreach (Coroutine routine in dormantTimers.Values)
+            {
+                if (routine != null)
+                {
+                    StopCoroutine(routine);
+                }
+            }
+            dormantTimers.Clear();
+            dormant.Clear();
+        }
+
+        private void ClearDormant(ulong playerId)
+        {
+            dormant.Remove(playerId);
+            if (dormantTimers.TryGetValue(playerId, out Coroutine routine))
+            {
+                if (routine != null)
+                {
+                    StopCoroutine(routine);
+                }
+                dormantTimers.Remove(playerId);
+            }
+        }
+
+        private IEnumerator DormantTimeout(ulong playerId)
+        {
+            yield return new WaitForSeconds(Mathf.Max(1f, disconnectGraceSeconds));
+
+            dormantTimers.Remove(playerId);
+            if (!dormant.Contains(playerId))
+            {
+                yield break; // they came back
+            }
+
+            dormant.Remove(playerId);
+            LogCast($"DROPPED: {PlayerLabel(playerId)} did not return — eliminating.");
+            SetAnnouncement($"{PlayerLabel(playerId)} did not return.");
+            EliminatePlayer(playerId);
         }
 
         private void EliminatePlayer(ulong playerId)
