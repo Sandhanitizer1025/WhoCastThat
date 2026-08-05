@@ -195,7 +195,14 @@ namespace WhoCastThat.Interactions
             GUILayout.Label("Keys: C=Connect  D=Draw(ends turn)  3=DrawCurse");
             GUILayout.Label("Cast: 1=Hex 2=Phase 4=Counterspell 5=Dispel 6=Reflection");
             GUILayout.Label("      7=Tribute 8=Foresight 9=Warp");
-            GUILayout.Label("P=force Tribute picker (test it without 3 players)");
+
+            // Read from the authority's replicated value, not a local field: the flag is decided
+            // on whichever process holds authority, so a local copy could disagree with reality.
+            NetworkedSpellGame hudGame = NetworkedSpellGame.Instance;
+            string pickerState = hudGame == null
+                ? "?"
+                : (hudGame.TributePickerForced ? "ON (forced)" : "off (skips with 1 candidate)");
+            GUILayout.Label($"P=force Tribute picker — currently: {pickerState}");
 
             GUILayout.EndArea();
         }

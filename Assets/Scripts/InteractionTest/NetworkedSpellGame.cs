@@ -173,6 +173,16 @@ namespace WhoCastThat.Interactions
         private readonly NetworkVariable<bool> gameActive = new(
             false, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Owner);
 
+        // Replicated so the answer is the SAME everywhere and can be shown on screen. The
+        // serialized field is only the starting value, and it is read by whichever process holds
+        // authority — which alternates between the main editor and the MPPM clone, and the clone
+        // loads the scene from disk. That made an Inspector tick appear to work or not at random.
+        private readonly NetworkVariable<bool> forceTributePicker = new(
+            false, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Owner);
+
+        /// <summary>Whether the Tribute picker is currently forced on. Shown by the test HUD.</summary>
+        public bool TributePickerForced => forceTributePicker.Value;
+
         // Shared status line every client displays.
         private readonly NetworkVariable<FixedString512Bytes> announcement = new(
             "", NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Owner);
@@ -409,6 +419,10 @@ namespace WhoCastThat.Interactions
 
             if (HasAuthority)
             {
+                // Seed the replicated flag from the Inspector value on whichever process actually
+                // holds authority. Set once here, not in StartGame, so a runtime toggle survives
+                // a match restart.
+                forceTributePicker.Value = alwaysShowTributePicker;
                 NetworkManager.OnConnectionEvent += OnConnectionEvent;
                 StartGame();
             }
@@ -1906,9 +1920,10 @@ namespace WhoCastThat.Interactions
             // the only option available, which is every 2-player match.
             // alwaysShowTributePicker overrides this: the picker needs 3+ players to appear at
             // all, and a machine that cannot run three clones without lagging can never see it.
-            if (candidates.Count == 1 && !alwaysShowTributePicker)
+            if (candidates.Count == 1 && !forceTributePicker.Value)
             {
-                LogCast($"TRIBUTE: only one candidate, skipping the picker.");
+                LogCast($"TRIBUTE: only one candidate, skipping the picker " +
+                        $"(forceTributePicker is OFF — press Ctrl+P to force it on).");
                 ResolveTribute(casterId, candidates[0]);
                 return;
             }
@@ -1966,9 +1981,9 @@ namespace WhoCastThat.Interactions
             {
                 return;
             }
-            alwaysShowTributePicker = !alwaysShowTributePicker;
-            LogCast($"DEBUG: alwaysShowTributePicker = {alwaysShowTributePicker}.");
-            SetAnnouncement(alwaysShowTributePicker
+            forceTributePicker.Value = !forceTributePicker.Value;
+            LogCast($"DEBUG: forceTributePicker = {forceTributePicker.Value}.");
+            SetAnnouncement(forceTributePicker.Value
                 ? "DEBUG: Tribute picker forced ON (shows even with one candidate)."
                 : "DEBUG: Tribute picker back to normal (skipped with one candidate).");
         }
