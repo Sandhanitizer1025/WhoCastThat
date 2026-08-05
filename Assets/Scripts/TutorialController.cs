@@ -57,15 +57,15 @@ public class TutorialController : MonoBehaviour
 
     const string RulesText =
         "Draw a <color=#b06cff>CURSE</color> and you explode — unless you cast a <b>Counterspell</b>. Last wizard standing wins!\n\n" +
-        "<b>Hex</b> (x5):  Next player takes 2 turns.\n" +
-        "<b>Tribute</b> (x4):  A player gives you a card.\n" +
-        "<b>Dispel</b> (x4):  Cancel another action.\n" +
-        "<b>Foresight</b> (x5):  Peek the top 3 potions.\n" +
-        "<b>Warp</b> (x4):  Shuffle the draw pile.\n" +
-        "<b>Phase</b> (x4):  End turn without drawing.\n" +
-        "<b>Reflection</b> (x4):  Copy the last card.\n" +
-        "<b>Counterspell</b> (x6):  Dodge a Curse.\n" +
-        "<b>Curse</b> (x4):  You explode!";
+        "<b>Hex</b>:  Next player takes 2 turns.\n" +
+        "<b>Tribute</b>:  A player gives you a card.\n" +
+        "<b>Dispel</b>:  Cancel another action.\n" +
+        "<b>Foresight</b>:  Peek the top 3 potions.\n" +
+        "<b>Warp</b>:  Shuffle the draw pile.\n" +
+        "<b>Phase</b>:  End turn without drawing.\n" +
+        "<b>Reflection</b>:  Copy the last card.\n" +
+        "<b>Counterspell</b>:  Dodge a Curse.\n" +
+        "<b>Curse</b>:  You explode!";
 
     [MenuItem("WhoCastThat/Build Tutorial UI")]
     public static void BuildTutorial()
