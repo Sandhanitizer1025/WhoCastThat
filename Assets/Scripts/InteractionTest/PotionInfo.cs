@@ -36,7 +36,7 @@ namespace WhoCastThat.Interactions
                 case PotionType.Hex:
                     return "End your turn. The next mage must take 2 turns in a row. Stacks.";
                 case PotionType.Tribute:
-                    return "Look at a mage as you cast. They hand you a potion of their choosing.";
+                    return "Pick a mage. They hand you a potion of their choosing.";
                 case PotionType.Dispel:
                     return "Cancels the spell on the table. Playable out of turn.";
                 case PotionType.Foresight:
@@ -48,7 +48,7 @@ namespace WhoCastThat.Interactions
                 case PotionType.Reflection:
                     return "Cast the last spell that resolved, as if it were yours.";
                 case PotionType.Counterspell:
-                    return "Survive a Curse. The Curse returns to the cauldron.";
+                    return "Survive a Curse. You choose where it goes back in the cauldron.";
                 case PotionType.Curse:
                     return "Drawn, never cast. Answer with a Counterspell or you are destroyed.";
                 default:
@@ -62,6 +62,7 @@ namespace WhoCastThat.Interactions
             switch (type)
             {
                 case PotionType.Dispel:
+                    return "Only out of turn";
                 case PotionType.Reflection:
                     return "On your turn";
                 case PotionType.Counterspell:
