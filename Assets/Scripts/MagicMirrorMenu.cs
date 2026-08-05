@@ -56,8 +56,8 @@ public class MagicMirrorMenu : MonoBehaviour
 
     public void OnHowToPlay()
     {
-        Debug.Log("[MirrorMenu] Loading Tutorial scene...");
-        UnityEngine.SceneManagement.SceneManager.LoadScene("Tutorial");
+        Debug.Log("[MirrorMenu] Loading TutorialScene...");
+        UnityEngine.SceneManagement.SceneManager.LoadScene("TutorialScene");
     }
 
     public void OnBack() { if (howToPanel != null) howToPanel.SetActive(false); }
