@@ -115,6 +115,11 @@ namespace WhoCastThat.Interactions
                  "brief network blip no longer ends a 2-player match outright.")]
         [SerializeField] private float disconnectGraceSeconds = 45f;
 
+        [Tooltip("Seconds the authority waits for a joining client to report who it is before " +
+                 "seating it as a brand-new player. Only this long, so a client that never " +
+                 "reports still gets a seat rather than being locked out of the match.")]
+        [SerializeField] private float identifyGraceSeconds = 8f;
+
         // ---- Replicated state (authority writes, everyone reads) ----
 
         // Seating, by client id. This is STABLE for the whole match: a player who is
@@ -356,6 +361,15 @@ namespace WhoCastThat.Interactions
         private readonly HashSet<ulong> dormant = new();
         private readonly Dictionary<ulong, Coroutine> dormantTimers = new();
 
+        // Persistent identity per connected client. A reconnecting player arrives with a BRAND NEW
+        // clientId, so clientId alone can never recognise them; the authentication id survives the
+        // round trip and is what lets a returning player be handed back their own seat and rack.
+        // Entries outlive the disconnect on purpose — that is the whole point — and are dropped
+        // only when the seat is genuinely given away.
+        private readonly Dictionary<ulong, string> clientAuthIds = new();
+        private readonly Dictionary<ulong, Coroutine> identifyTimers = new();
+        private readonly HashSet<ulong> identifyExpired = new();
+
         // Which potion is sitting in which rack slot, per seat. A slot stays reserved while
         // its potion is held by a player, and is released when the potion despawns.
         private readonly Dictionary<int, NetworkedPotion[]> rackSlots = new();
@@ -399,9 +413,122 @@ namespace WhoCastThat.Interactions
                 StartGame();
             }
 
+            // Tell the authority who we are. Sent by EVERY client, the authority included, so a
+            // seat can be matched back to a person rather than to a client id that changes on
+            // every reconnect. Seating during a match waits on this.
+            ReportIdentity();
+
             // Fire initial state for late subscribers / joiners.
             AnnouncementChanged?.Invoke(CurrentAnnouncement);
             TurnChanged?.Invoke(CurrentTurnClientId);
+        }
+
+        private void ReportIdentity()
+        {
+            string authId = XRMultiplayer.XRINetworkGameManager.AuthenicationId;
+            if (string.IsNullOrEmpty(authId))
+            {
+                // Not signed in (an offline test run). Nothing to key a seat on, so let the
+                // authority's identify grace expire and seat us as a newcomer.
+                return;
+            }
+            IdentifyRpc(new FixedString64Bytes(authId));
+        }
+
+        /// <summary>
+        /// A client announcing its persistent identity. If it matches a seat being held open for
+        /// a dropped player, that seat — and the rack still standing at it — is handed straight
+        /// back, which is what makes a reconnect keep its hand instead of being dealt a fresh one.
+        /// </summary>
+        [Rpc(SendTo.Authority)]
+        private void IdentifyRpc(FixedString64Bytes authId, RpcParams rpcParams = default)
+        {
+            if (!HasAuthority)
+            {
+                return;
+            }
+
+            ulong sender = rpcParams.Receive.SenderClientId;
+            string id = authId.ToString();
+            clientAuthIds[sender] = id;
+            StopIdentifyTimer(sender);
+
+            if (gameActive.Value && IndexOfPlayer(sender) < 0)
+            {
+                int seat = SeatHeldFor(id);
+                if (seat >= 0)
+                {
+                    ulong previous = turnOrder[seat];
+                    ClearDormant(previous);
+                    clientAuthIds.Remove(previous);
+
+                    // Overwrite in place. Seat index == turn-order index == rack index, so
+                    // replacing the entry keeps the rack they left behind attached to them.
+                    turnOrder[seat] = sender;
+                    clientAuthIds[sender] = id;
+
+                    LogCast($"RECONNECT: {PlayerLabel(sender)} reclaimed seat {seat} " +
+                            $"(was client {previous}) with their rack intact.");
+                    SetAnnouncement($"{PlayerLabel(sender)} is back at their seat.");
+                    AnnounceCurrentTurn();
+                    return;
+                }
+            }
+
+            // Not a returning player: fall through to ordinary seating.
+            SyncSeatingWithConnectedClients();
+            if (!gameActive.Value && turnOrder.Count >= minPlayersToStart)
+            {
+                StartGame();
+            }
+        }
+
+        // A seat being held for a dropped player with this persistent identity, or -1.
+        private int SeatHeldFor(string authId)
+        {
+            if (string.IsNullOrEmpty(authId))
+            {
+                return -1;
+            }
+            for (int i = 0; i < turnOrder.Count; i++)
+            {
+                ulong occupant = turnOrder[i];
+                if (dormant.Contains(occupant) &&
+                    clientAuthIds.TryGetValue(occupant, out string held) && held == authId)
+                {
+                    return i;
+                }
+            }
+            return -1;
+        }
+
+        private void StopIdentifyTimer(ulong clientId)
+        {
+            if (identifyTimers.TryGetValue(clientId, out Coroutine routine))
+            {
+                if (routine != null)
+                {
+                    StopCoroutine(routine);
+                }
+                identifyTimers.Remove(clientId);
+            }
+        }
+
+        // A client that never reports an identity must still get a seat eventually, or a bad
+        // build or a signed-out player would sit outside the match forever.
+        private IEnumerator IdentifyTimeout(ulong clientId)
+        {
+            yield return new WaitForSeconds(Mathf.Max(1f, identifyGraceSeconds));
+
+            identifyTimers.Remove(clientId);
+            if (clientAuthIds.ContainsKey(clientId))
+            {
+                yield break;
+            }
+
+            identifyExpired.Add(clientId);
+            LogCast($"IDENTIFY: client {clientId} never reported an identity — seating as new.");
+            SyncSeatingWithConnectedClients();
         }
 
         public override void OnNetworkDespawn()
@@ -574,6 +701,18 @@ namespace WhoCastThat.Interactions
                     continue;
                 }
 
+                // Do not seat anyone until we know who they are. A returning player would
+                // otherwise be treated as a newcomer and handed the FIRST vacant seat, which is
+                // usually their own dormant one — clearing the very rack we are holding for them.
+                if (!clientAuthIds.ContainsKey(id) && !identifyExpired.Contains(id))
+                {
+                    if (!identifyTimers.ContainsKey(id))
+                    {
+                        identifyTimers[id] = StartCoroutine(IdentifyTimeout(id));
+                    }
+                    continue;
+                }
+
                 if (turnOrder.Count < maxSeats)
                 {
                     turnOrder.Add(id);
@@ -597,8 +736,10 @@ namespace WhoCastThat.Interactions
                 ulong departed = turnOrder[vacant];
                 eliminated.Remove(departed);
                 // Their grace timer must die with the seat, or it would later "eliminate" an id
-                // that now belongs to whoever took the seat over.
+                // that now belongs to whoever took the seat over. The identity goes too: the seat
+                // is being given away, so it must stop being reclaimable.
                 ClearDormant(departed);
+                clientAuthIds.Remove(departed);
                 RemoveCurse(departed);
                 ClearSeatPotions(vacant); // the ghost's hand goes with them
 
@@ -2225,6 +2366,18 @@ namespace WhoCastThat.Interactions
             }
             dormantTimers.Clear();
             dormant.Clear();
+
+            // Identify bookkeeping is per-match too. clientAuthIds is deliberately NOT cleared:
+            // it maps live clients to who they are, and a fresh match does not change that.
+            foreach (Coroutine routine in identifyTimers.Values)
+            {
+                if (routine != null)
+                {
+                    StopCoroutine(routine);
+                }
+            }
+            identifyTimers.Clear();
+            identifyExpired.Clear();
         }
 
         private void ClearDormant(ulong playerId)
