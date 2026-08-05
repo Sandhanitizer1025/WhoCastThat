@@ -99,6 +99,11 @@ namespace WhoCastThat.Interactions
             if (kb.digit7Key.wasPressedThisFrame) Cast(PotionType.Tribute);
             if (kb.digit8Key.wasPressedThisFrame) Cast(PotionType.Foresight);
             if (kb.digit9Key.wasPressedThisFrame) Cast(PotionType.Warp);
+
+            // P forces the Tribute victim picker to appear even with a single candidate, so it
+            // can be tested without the 3+ players it normally needs. Sent to the authority,
+            // because that is where the decision is made and it may be the other process.
+            if (kb.pKey.wasPressedThisFrame && game != null) game.ToggleTributePicker();
         }
 
         private void Connect()
@@ -190,6 +195,7 @@ namespace WhoCastThat.Interactions
             GUILayout.Label("Keys: C=Connect  D=Draw(ends turn)  3=DrawCurse");
             GUILayout.Label("Cast: 1=Hex 2=Phase 4=Counterspell 5=Dispel 6=Reflection");
             GUILayout.Label("      7=Tribute 8=Foresight 9=Warp");
+            GUILayout.Label("P=force Tribute picker (test it without 3 players)");
 
             GUILayout.EndArea();
         }

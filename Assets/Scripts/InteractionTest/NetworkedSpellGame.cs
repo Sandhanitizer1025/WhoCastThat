@@ -1806,6 +1806,32 @@ namespace WhoCastThat.Interactions
             tributePicker.Show(ids, names, ChooseTributeTarget);
         }
 
+        /// <summary>
+        /// Flip <c>alwaysShowTributePicker</c> on the authority at runtime. Ticking the field in
+        /// the Inspector is not enough on its own: MPPM clones are separate processes that load
+        /// the scene FROM DISK, so an unsaved tick is invisible to them — and when the clone is
+        /// the authority (which alternates run to run) the picker is still skipped. This reaches
+        /// whichever process is actually deciding, with no scene edit to remember to undo.
+        /// </summary>
+        public void ToggleTributePicker()
+        {
+            ToggleTributePickerRpc();
+        }
+
+        [Rpc(SendTo.Authority)]
+        private void ToggleTributePickerRpc()
+        {
+            if (!HasAuthority)
+            {
+                return;
+            }
+            alwaysShowTributePicker = !alwaysShowTributePicker;
+            LogCast($"DEBUG: alwaysShowTributePicker = {alwaysShowTributePicker}.");
+            SetAnnouncement(alwaysShowTributePicker
+                ? "DEBUG: Tribute picker forced ON (shows even with one candidate)."
+                : "DEBUG: Tribute picker back to normal (skipped with one candidate).");
+        }
+
         /// <summary>Called by the picker once the caster has settled on a victim.</summary>
         public void ChooseTributeTarget(ulong targetId)
         {
