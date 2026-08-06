@@ -18,7 +18,23 @@ namespace WhoCastThat.Flow
         public event Action<string> Submitted;
         public event Action Cancelled;
 
-        const string Alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+        /// <summary>
+        /// Keys offered on the pad.
+        ///
+        /// The service's real join-code alphabet is NARROWER than this and is not published in
+        /// the package — it is validated server-side. Measured rejections so far: 'O' and 'Z'.
+        /// Characters positively seen in generated codes: C F H J K L N P Q R W 6 7 8
+        /// (from 8L7NQK, W8QCNQ, 7FPJPR, R6WP6H).
+        ///
+        /// The full set is offered ON PURPOSE. Narrowing it to a guess risks omitting a
+        /// character that real codes DO use, which would make some rooms impossible to type —
+        /// strictly worse than typing a bad code and being told so. An unusable code now fails
+        /// gracefully and returns the player to the mirror with an explanation.
+        ///
+        /// If the exact alphabet is ever confirmed, trimming this string is the only change
+        /// needed; the grid lays itself out from whatever is here.
+        /// </summary>
+        public const string Alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
 
         static readonly Color PanelBg  = new Color(0.05f, 0.02f, 0.12f, 0.95f);
         static readonly Color Accent   = new Color(0.72f, 0.45f, 1f, 1f);

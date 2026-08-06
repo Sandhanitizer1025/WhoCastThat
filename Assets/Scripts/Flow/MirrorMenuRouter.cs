@@ -1,3 +1,4 @@
+using TMPro;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
@@ -24,14 +25,9 @@ namespace WhoCastThat.Flow
         [Tooltip("Tutorial scene reached from How to Play.")]
         [SerializeField] private string tutorialSceneName = "TutorialScene";
 
-        [Tooltip("Fallback room name if the player somehow arrived without a saved username.")]
-        [SerializeField] private string fallbackPlayerName = "Mage";
-
-        // Written by FirebaseLoginManager on a successful login/sign-up in BootScene.
-        const string LocalUsernameKey = "PlayerUsername";
-
         MagicMirrorMenu m_Menu;
         RoomCodePad m_Pad;
+        TextMeshProUGUI m_Banner;
 
         void Start()
         {
@@ -43,8 +39,10 @@ namespace WhoCastThat.Flow
                 return;
             }
 
-            // Any stale intent from a previous round must not survive a return to the lobby.
+            // Any stale intent from a previous round must not survive a return to the lobby,
+            // and the connector's static must be cleared or a second trip never connects.
             LobbyIntent.Clear();
+            SessionIntentConnector.ResetHandled();
 
             Rewire(m_Menu.playButton, OnPlay);
             Rewire(m_Menu.hostButton, OnHost);
@@ -57,7 +55,40 @@ namespace WhoCastThat.Flow
                 m_Pad = RoomCodePad.Build(canvasRect, roomCodeLength);
                 m_Pad.Submitted += OnCodeEntered;
                 m_Pad.Cancelled += OnCodeCancelled;
+                m_Banner = BuildBanner(canvasRect);
             }
+
+            ShowError(LobbyIntent.ConsumeError());
+        }
+
+        // A failed join sends the player back here; without this they would simply reappear at
+        // the mirror with no idea whether the code was wrong, the room was full, or the network
+        // dropped — and would most likely retype the same code.
+        static TextMeshProUGUI BuildBanner(RectTransform parent)
+        {
+            GameObject go = new GameObject("ErrorBanner", typeof(RectTransform));
+            go.transform.SetParent(parent, false);
+            RectTransform rt = go.GetComponent<RectTransform>();
+            rt.anchoredPosition = new Vector2(0f, -820f);
+            rt.sizeDelta = new Vector2(940f, 160f);
+
+            TextMeshProUGUI tmp = go.AddComponent<TextMeshProUGUI>();
+            tmp.fontSize = 40f;
+            tmp.color = new Color(1f, 0.42f, 0.42f, 1f);
+            tmp.alignment = TextAlignmentOptions.Center;
+            tmp.fontStyle = FontStyles.Bold;
+            tmp.enableWordWrapping = true;
+            tmp.text = "";
+            return tmp;
+        }
+
+        void ShowError(string reason)
+        {
+            if (m_Banner == null)
+            {
+                return;
+            }
+            m_Banner.text = string.IsNullOrEmpty(reason) ? "" : reason;
         }
 
         static void Rewire(Button button, UnityEngine.Events.UnityAction action)
@@ -67,11 +98,6 @@ namespace WhoCastThat.Flow
             button.onClick.AddListener(action);
         }
 
-        string PlayerName()
-        {
-            string saved = PlayerPrefs.GetString(LocalUsernameKey, "");
-            return string.IsNullOrEmpty(saved) ? fallbackPlayerName : saved;
-        }
 
         // --- button handlers ---------------------------------------------------------------
 
@@ -84,7 +110,7 @@ namespace WhoCastThat.Flow
 
         void OnHost()
         {
-            string room = PlayerName() + "'s Room";
+            string room = LobbyIntent.SuggestedRoomName();
             Debug.Log("[LobbyFlow] Hosting \"" + room + "\".");
             LobbyIntent.SetCreate(room);
             GoToGame();

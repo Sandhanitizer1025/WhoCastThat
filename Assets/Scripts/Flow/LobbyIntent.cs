@@ -1,3 +1,5 @@
+using UnityEngine;
+
 namespace WhoCastThat.Flow
 {
     /// <summary>
@@ -72,6 +74,38 @@ namespace WhoCastThat.Flow
             Request = LobbyRequest.None;
             RoomName = null;
             RoomCode = null;
+        }
+
+        // --- failure reporting back to the mirror -------------------------------------------
+
+        /// <summary>
+        /// Why the last attempt to reach a room failed, carried back to the lobby so the player
+        /// is told what went wrong instead of just finding themselves at the mirror again.
+        /// </summary>
+        public static string LastError { get; private set; }
+
+        public static void SetError(string reason)
+        {
+            LastError = reason;
+        }
+
+        public static string ConsumeError()
+        {
+            string reason = LastError;
+            LastError = null;
+            return reason;
+        }
+
+        // Written by FirebaseLoginManager on a successful login/sign-up in BootScene.
+        const string LocalUsernameKey = "PlayerUsername";
+
+        /// <summary>
+        /// Room name built from the signed-in player's name, shared by Host and Quick Play.
+        /// </summary>
+        public static string SuggestedRoomName()
+        {
+            string saved = PlayerPrefs.GetString(LocalUsernameKey, "");
+            return (string.IsNullOrEmpty(saved) ? "Mage" : saved) + "'s Room";
         }
     }
 }

@@ -699,6 +699,11 @@ PrefabInstance:
       propertyPath: m_AnchoredPosition.y
       value: 3.717
       objectReference: {fileID: 0}
+    - target: {fileID: 7170882263771015990, guid: 77ac6b10722bcca4a8baf70e44d89e78,
+        type: 3}
+      propertyPath: m_IsActive
+      value: 0
+      objectReference: {fileID: 0}
     - target: {fileID: 7174019212652907432, guid: 77ac6b10722bcca4a8baf70e44d89e78,
         type: 3}
       propertyPath: m_RootOrder
@@ -1044,7 +1049,8 @@ PrefabInstance:
       propertyPath: m_UseGravity
       value: 1
       objectReference: {fileID: 0}
-    m_RemovedComponents: []
+    m_RemovedComponents:
+    - {fileID: 3162837999534115201, guid: 77ac6b10722bcca4a8baf70e44d89e78, type: 3}
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
     m_AddedComponents:
@@ -2649,6 +2655,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   gameSceneName: InteractionTestScene
   roomCodeLength: 6
+  tutorialSceneName: TutorialScene
   fallbackPlayerName: Mage
 --- !u!4 &1471072143
 Transform:

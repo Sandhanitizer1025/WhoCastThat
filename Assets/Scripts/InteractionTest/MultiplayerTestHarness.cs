@@ -70,6 +70,16 @@ namespace WhoCastThat.Interactions
             {
                 return;
             }
+
+            // In a real build the player always arrives through the magic mirror, so reaching
+            // here means something went wrong. QuickJoinLobby uses an EMPTY filter and would
+            // drop them into an arbitrary session — possibly a teammate's — so restrict this
+            // convenience to the editor, where entering the game scene directly is deliberate.
+            if (!Application.isEditor)
+            {
+                return;
+            }
+
             Connect();
         }
 
