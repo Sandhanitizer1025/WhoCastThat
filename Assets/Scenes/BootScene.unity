@@ -10050,7 +10050,9 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   unityOidcProviderName: oidc-firebase
-  lobbySceneName: zelda
+  lobbySceneName: LobbyMirrorScene
+  databaseUrl: https://whocastthat-default-rtdb.asia-southeast1.firebasedatabase.app/
+  fadeDuration: 2
   usernameInput: {fileID: 347044471}
   passwordInput: {fileID: 19478109}
   statusText: {fileID: 617023985}

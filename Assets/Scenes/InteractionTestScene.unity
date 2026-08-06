@@ -24307,6 +24307,7 @@ GameObject:
   - component: {fileID: 1100086885}
   - component: {fileID: 1100086886}
   - component: {fileID: 1100086887}
+  - component: {fileID: 1100086888}
   m_Layer: 0
   m_Name: TestHarness
   m_TagString: Untagged
@@ -24393,6 +24394,21 @@ MonoBehaviour:
   - {fileID: 409806652}
   leashRadius: 0.6
   clampPhysicalWalking: 1
+--- !u!114 &1100086888
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1100086882}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 03ceda5a2ef58144486588ee645fc9dd, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  maxPlayers: 4
+  authTimeoutSeconds: 20
+  quickJoinWhenNoIntent: 0
 --- !u!1 &1105205903
 GameObject:
   m_ObjectHideFlags: 0

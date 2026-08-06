@@ -1,6 +1,7 @@
 using Unity.Netcode;
 using UnityEngine;
 using UnityEngine.InputSystem;
+using WhoCastThat.Flow;
 using XRMultiplayer;
 
 namespace WhoCastThat.Interactions
@@ -52,8 +53,24 @@ namespace WhoCastThat.Interactions
         {
             if (autoConnectOnStart)
             {
-                Invoke(nameof(Connect), autoConnectDelay);
+                Invoke(nameof(AutoConnect), autoConnectDelay);
             }
+        }
+
+        /// <summary>
+        /// Auto-connect only applies when the game scene was entered DIRECTLY for rules testing.
+        /// When the player arrived from the magic mirror, <see cref="SessionIntentConnector"/>
+        /// owns the connection: letting both fire would land a Create/Join and a QuickJoin in the
+        /// same frame, and XRINetworkGameManager.AbleToConnect() responds to the second by
+        /// disconnecting the first to "hot join" -- which reads as a random failure to connect.
+        /// </summary>
+        private void AutoConnect()
+        {
+            if (SessionIntentConnector.HandledConnection)
+            {
+                return;
+            }
+            Connect();
         }
 
         private void Update()

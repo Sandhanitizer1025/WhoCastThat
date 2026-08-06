@@ -1,5 +1,6 @@
 using TMPro;
 using UnityEngine;
+using XRMultiplayer;
 
 namespace WhoCastThat.Interactions
 {
@@ -122,7 +123,7 @@ namespace WhoCastThat.Interactions
             NetworkedSpellGame game = NetworkedSpellGame.Instance;
             if (game == null || !game.GameActive)
             {
-                return "";
+                return LobbyPrompt();
             }
 
             // Most urgent first: you are about to be destroyed.
@@ -154,6 +155,26 @@ namespace WhoCastThat.Interactions
             }
 
             return $"<color=#B9A9D9>Waiting for {game.PlayerLabel(game.CurrentTurnClientId)}...</color>";
+        }
+
+        // Before the match starts this HUD would otherwise be blank — which is exactly the
+        // moment the host needs to read their room code out to everyone else. Join-by-code
+        // from the magic mirror is unusable if the code is never displayed anywhere.
+        private string LobbyPrompt()
+        {
+            if (XRINetworkGameManager.Connected == null || !XRINetworkGameManager.Connected.Value)
+            {
+                return "<color=#B9A9D9>Connecting to the arcane network...</color>";
+            }
+
+            string code = XRINetworkGameManager.ConnectedRoomCode;
+            if (string.IsNullOrEmpty(code))
+            {
+                return "<color=#B9A9D9>Waiting for other mages to arrive...</color>";
+            }
+
+            return $"<color=#B6F5A6><b>ROOM CODE: {code}</b></color>\n" +
+                   "<color=#B9A9D9>Waiting for other mages to arrive...</color>";
         }
     }
 }
