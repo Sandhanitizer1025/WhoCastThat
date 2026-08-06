@@ -21,6 +21,9 @@ namespace WhoCastThat.Flow
         [Tooltip("Length of a Unity session join code.")]
         [SerializeField] private int roomCodeLength = 6;
 
+        [Tooltip("Tutorial scene reached from How to Play.")]
+        [SerializeField] private string tutorialSceneName = "TutorialScene";
+
         [Tooltip("Fallback room name if the player somehow arrived without a saved username.")]
         [SerializeField] private string fallbackPlayerName = "Mage";
 
@@ -46,6 +49,7 @@ namespace WhoCastThat.Flow
             Rewire(m_Menu.playButton, OnPlay);
             Rewire(m_Menu.hostButton, OnHost);
             Rewire(m_Menu.joinButton, OnJoin);
+            Rewire(m_Menu.howToButton, OnHowToPlay);
 
             RectTransform canvasRect = m_Menu.GetComponent<RectTransform>();
             if (canvasRect != null)
@@ -111,6 +115,14 @@ namespace WhoCastThat.Flow
             SetMainPanelVisible(true);
         }
 
+        void OnHowToPlay()
+        {
+            // TutorialDriver's Back button hardcodes LoadScene("zelda"), so arm the redirect
+            // that brings the player back here instead. See TutorialReturnRedirect.
+            TutorialReturnRedirect.Arm(SceneManager.GetActiveScene().name);
+            SceneManager.LoadScene(tutorialSceneName);
+        }
+
         void SetMainPanelVisible(bool visible)
         {
             Transform main = m_Menu.transform.Find("MainPanel");
@@ -119,6 +131,8 @@ namespace WhoCastThat.Flow
 
         void GoToGame()
         {
+            // Heading into the match, not the tutorial: make sure a stale redirect cannot fire.
+            TutorialReturnRedirect.Disarm();
             SceneManager.LoadScene(gameSceneName);
         }
     }
