@@ -60,8 +60,7 @@ namespace WhoCastThat.Flow
 
             if (!m_IsClone)
             {
-                PublishRoomCode();
-                return;
+                return;   // the main editor is driven explicitly; it publishes nothing on its own
             }
 
             string cmd = ReadCommand();
@@ -71,21 +70,6 @@ namespace WhoCastThat.Flow
             }
             m_LastSeen = cmd;
             Handle(cmd);
-        }
-
-        // Main editor side. Publishing the code the moment the room exists keeps the whole
-        // handshake in-process: driving it over MCP instead meant ~25 s per step, and the host's
-        // relay allocation was dropped for inactivity before the clone ever got the code.
-        void PublishRoomCode()
-        {
-            string code = XRMultiplayer.XRINetworkGameManager.ConnectedRoomCode;
-            if (string.IsNullOrEmpty(code) || code == m_LastSeen)
-            {
-                return;
-            }
-            m_LastSeen = code;
-            WriteCommand("JOIN:" + code);
-            Debug.Log($"[Probe] published room code {code} for the clone.");
         }
 
         public static void WriteCommand(string body)
@@ -117,19 +101,34 @@ namespace WhoCastThat.Flow
             string scene = SceneManager.GetActiveScene().name;
             Debug.Log($"[Probe] got '{cmd}' while in '{scene}'.");
 
-            // Commands are only meaningful from the lobby; ignore them mid-match.
-            if (scene != "LobbyMirrorScene")
-            {
-                Debug.Log("[Probe] not in the lobby — ignoring.");
-                return;
-            }
-
             // Strip the nonce the main editor appends so repeated identical commands still fire.
             string body = cmd;
             int hash = body.IndexOf('#');
             if (hash >= 0)
             {
                 body = body.Substring(0, hash);
+            }
+
+            // LOBBY is the one command that is valid mid-match: it resets this clone so the
+            // next scenario can be set up without restarting play mode.
+            if (body == "LOBBY")
+            {
+                Debug.Log("[Probe] returning to the lobby.");
+                LobbyIntent.Clear();
+                SessionIntentConnector.ResetHandled();
+                if (XRMultiplayer.XRINetworkGameManager.Instance != null)
+                {
+                    XRMultiplayer.XRINetworkGameManager.Instance.Disconnect();
+                }
+                SceneManager.LoadScene("LobbyMirrorScene");
+                return;
+            }
+
+            // The rest only make sense from the lobby.
+            if (scene != "LobbyMirrorScene")
+            {
+                Debug.Log("[Probe] not in the lobby — ignoring.");
+                return;
             }
 
             if (body.StartsWith("JOIN:"))

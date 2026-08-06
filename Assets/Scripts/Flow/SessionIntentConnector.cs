@@ -159,12 +159,17 @@ namespace WhoCastThat.Flow
             ISessionInfo best = null;
             if (query.Status == TaskStatus.RanToCompletion && query.Result != null)
             {
+                Debug.Log($"[LobbyFlow] Quick play saw {query.Result.Sessions.Count} session(s).");
                 foreach (ISessionInfo session in query.Result.Sessions)
                 {
-                    if (session.AvailableSlots > 0 && IsOurGame(session))
+                    bool ours = IsOurGame(session);
+                    bool room = session.AvailableSlots > 0;
+                    Debug.Log($"[LobbyFlow]   \"{session.Name}\" scene={SceneTagOf(session)} " +
+                              $"slots={session.AvailableSlots} ours={ours} -> " +
+                              $"{(ours && room ? "JOIN" : "skip")}");
+                    if (room && ours && best == null)
                     {
                         best = session;
-                        break;
                     }
                 }
             }
@@ -180,6 +185,18 @@ namespace WhoCastThat.Flow
                 Debug.Log($"[LobbyFlow] Quick play found no room; creating \"{room}\".");
                 XRINetworkGameManager.Instance.CreateNewLobby(room, false, maxPlayers);
             }
+        }
+
+        private static string SceneTagOf(ISessionInfo session)
+        {
+            SessionProperty scene;
+            if (session.Properties != null &&
+                session.Properties.TryGetValue(SessionManager.k_SceneKeyIdentifier, out scene) &&
+                scene != null)
+            {
+                return scene.Value;
+            }
+            return "<none>";
         }
 
         private bool IsOurGame(ISessionInfo session)

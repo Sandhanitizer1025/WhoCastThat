@@ -24408,6 +24408,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   maxPlayers: 4
   authTimeoutSeconds: 20
+  connectTimeoutSeconds: 45
+  lobbySceneName: LobbyMirrorScene
   quickJoinWhenNoIntent: 0
 --- !u!1 &1105205903
 GameObject:
