@@ -1,0 +1,26 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 87c3dcf43960e4e459794368d055e73e, type: 3}
+  m_Name: VFX_Curse
+  m_EditorClassIdentifier: 
+  type: 8
+  primary: {r: 0.55, g: 0.04, b: 0.1, a: 1}
+  secondary: {r: 0, g: 0, b: 0, a: 1}
+  motion: 8
+  duration: 2
+  scale: 2
+  burstCount: 90
+  lightIntensity: 0.35
+  pulseSpeed: 0.5
+  pulseDepth: 0.5
+  castSound: {fileID: 0}
+  volume: 0.8
