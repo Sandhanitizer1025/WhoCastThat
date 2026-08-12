@@ -27,8 +27,9 @@ namespace WhoCastThat.Interactions
         private const float LabelHeight = 0.115f;
 
         // What the other players see: one anonymous colour for every tube, so the reveal reads as
-        // "three potions came out" and nothing else.
-        private static readonly Color UnknownColour = new(0.58f, 0.56f, 0.68f);
+        // "three potions came out" and nothing else. Shared with the concealed tint on a potion
+        // that is not yours, so "I am not allowed to see this" looks the same everywhere.
+        private static readonly Color UnknownColour = NetworkedPotion.ConcealedColour;
 
         private static readonly int SideColourId = Shader.PropertyToID("_SideColour");
         private static readonly int TopColourId = Shader.PropertyToID("_TopColour");

@@ -1370,7 +1370,7 @@ namespace WhoCastThat.Interactions
             {
                 // Authority owns the fresh potion; ClientNetworkTransform replicates
                 // this owner-driven motion so every client sees it float to the rack.
-                StartCoroutine(FloatPotionToRack(potion, spawnPos, restPos, onSeated));
+                StartCoroutine(FloatPotionToRack(potion, playerId, spawnPos, restPos, onSeated));
             }
             else
             {
@@ -1379,7 +1379,8 @@ namespace WhoCastThat.Interactions
             }
         }
 
-        private IEnumerator FloatPotionToRack(NetworkedPotion potion, Vector3 from, Vector3 to, Action onArrived)
+        private IEnumerator FloatPotionToRack(NetworkedPotion potion, ulong drawerId, Vector3 from,
+                                              Vector3 to, Action onArrived)
         {
             Transform tf = potion != null ? potion.transform : null;
             Rigidbody body = potion != null ? potion.GetComponent<Rigidbody>() : null;
@@ -1390,13 +1391,15 @@ namespace WhoCastThat.Interactions
                 body.isKinematic = true;
             }
 
-            // Hold it over the cauldron so everyone can read what was brewed. The reveal is
-            // broadcast rather than shown locally, because the whole table should learn what
-            // was drawn at the same moment.
+            // Hold it over the cauldron so the drawer can read what they brewed. The pause is
+            // public — everyone watches the tube rise and hang — but the caption naming the
+            // potion goes to the drawer alone. Broadcasting it told the whole table what card
+            // just entered an opponent's hand.
             float reveal = Mathf.Max(0f, drawRevealSeconds);
             if (reveal > 0f && potion != null)
             {
-                potion.RevealRpc((int)potion.Type, reveal);
+                potion.RevealToDrawerRpc((int)potion.Type, reveal,
+                    RpcTarget.Single(drawerId, RpcTargetUse.Temp));
 
                 float held = 0f;
                 while (potion != null && held < reveal)

@@ -70,6 +70,9 @@ namespace WhoCastThat.Interactions
         private bool glowVisible;
         private float nextGlowCheck;
 
+        // Which way the tint was last resolved, so the slow tick can spot ownership changing.
+        private bool tintedAsMine;
+
 
         // Owner-write so the authority can set the type when it spawns the potion.
         private readonly NetworkVariable<int> networkedType = new(
@@ -172,12 +175,29 @@ namespace WhoCastThat.Interactions
         // table. The stagger from each potion's own spawn time spreads the cost out.
         private void Update()
         {
-            if (!showCastableGlow || Time.time < nextGlowCheck)
+            if (Time.time < nextGlowCheck)
             {
                 return;
             }
 
             nextGlowCheck = Time.time + Mathf.Max(0.02f, glowCheckInterval);
+
+            // "Is this mine?" is not answerable at spawn. ownerSeat arrives as its own replicated
+            // update, and this client's own seat may not be assigned yet either, so both start
+            // unknown and resolve a moment later. Re-tint when the answer flips.
+            //
+            // Deliberately ahead of the showCastableGlow gate: concealment is not a debug
+            // affordance, and turning the glow off in the Inspector must not strand every potion
+            // on the table showing the colour it happened to spawn with.
+            if (BelongsToLocalPlayer() != tintedAsMine)
+            {
+                ApplyVisual();
+            }
+
+            if (!showCastableGlow)
+            {
+                return;
+            }
 
             NetworkedSpellGame game = NetworkedSpellGame.Instance;
             bool castable = game != null
@@ -392,15 +412,20 @@ namespace WhoCastThat.Interactions
         }
 
         /// <summary>
-        /// Show everyone what was just brewed. Called by the authority while the potion hangs
-        /// over the cauldron, before it floats to the rack.
+        /// Show the DRAWER what they just brewed, while the potion hangs over the cauldron.
+        ///
+        /// Sent to that one client rather than broadcast. This used to go to everyone, on the
+        /// reasoning that the whole table should learn what was drawn at the same moment — which
+        /// handed every opponent a captioned reveal of a card they are not entitled to see. The
+        /// rest of the table still watches the tube rise and hang, but it is the anonymous colour
+        /// and carries no caption, exactly as the Foresight reveal looks to non-casters.
         ///
         /// The type is passed explicitly rather than read from <see cref="Type"/>: the RPC and
         /// the type's NetworkVariable update are separate messages with no guaranteed ordering,
         /// so a client could otherwise render the reveal for the previous/default type.
         /// </summary>
-        [Rpc(SendTo.Everyone)]
-        public void RevealRpc(int potionType, float seconds)
+        [Rpc(SendTo.SpecifiedInParams)]
+        public void RevealToDrawerRpc(int potionType, float seconds, RpcParams rpcParams)
         {
             Label().ShowFor(PotionInfo.DrawBanner((PotionType)potionType), seconds);
         }
@@ -589,10 +614,20 @@ namespace WhoCastThat.Interactions
 
         private void ApplyVisual()
         {
-            name = $"Potion ({Type})";
+            // Whose potion this is decides what it looks like HERE. Every client holds the real
+            // type (networkedType is readable by everyone — see the note on the concealment
+            // caveat in OnNetworkSpawn), so concealment is a rendering decision made per client:
+            // your own potions carry their colour, everyone else's carry the anonymous one.
+            bool mine = BelongsToLocalPlayer();
+            tintedAsMine = mine;
+
+            // The GameObject name is part of the leak, not just decoration — it is readable
+            // straight out of the hierarchy while spectating.
+            name = mine ? $"Potion ({Type})" : "Potion (concealed)";
+
             if (tintRenderer != null)
             {
-                Color c = ColorFor(Type);
+                Color c = mine ? ColorFor(Type) : ConcealedColour;
                 Color side = new Color(c.r * 0.75f, c.g * 0.75f, c.b * 0.75f, 1f);
                 tintBlock ??= new MaterialPropertyBlock();
                 tintRenderer.GetPropertyBlock(tintBlock);
@@ -609,6 +644,13 @@ namespace WhoCastThat.Interactions
 
             TypeApplied?.Invoke(Type);
         }
+
+        /// <summary>
+        /// What a potion that is not yours looks like: one anonymous colour, so an opponent's
+        /// rack reads as "four potions" and nothing more. Shared with the Foresight reveal so a
+        /// concealed potion looks identical wherever it appears.
+        /// </summary>
+        public static readonly Color ConcealedColour = new(0.58f, 0.56f, 0.68f);
 
         /// <summary>Placeholder colour per type — swap for real potion art later.</summary>
         public static Color ColorFor(PotionType type)
