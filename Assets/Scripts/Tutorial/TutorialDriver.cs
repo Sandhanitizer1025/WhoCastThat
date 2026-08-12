@@ -76,6 +76,7 @@ namespace WhoCastThat.Tutorial
         private bool advanceRequested;
         private bool guideEverOpened;
         private Camera headCam;
+        private InputAction guideToggle; // VR controller button (+ E) that opens/closes the book
 
         private void Awake()
         {
@@ -95,18 +96,62 @@ namespace WhoCastThat.Tutorial
             BuildSeatMarker();
         }
 
-        private void OnEnable() => NetworkedSpellGame.AnnouncementChanged += OnAnnouncement;
-        private void OnDisable() => NetworkedSpellGame.AnnouncementChanged -= OnAnnouncement;
+        private void OnEnable()
+        {
+            NetworkedSpellGame.AnnouncementChanged += OnAnnouncement;
 
-        private void Start() => StartCoroutine(RunTutorial());
+            // Open/close the Guide Book with a VR controller face button (A / X on either hand),
+            // the controller menu button, or E on the keyboard for desktop testing.
+            guideToggle = new InputAction("GuideToggle", InputActionType.Button);
+            guideToggle.AddBinding("<XRController>{LeftHand}/primaryButton");
+            guideToggle.AddBinding("<XRController>{RightHand}/primaryButton");
+            guideToggle.AddBinding("<XRController>{LeftHand}/menuButton");
+            guideToggle.AddBinding("<XRController>{RightHand}/menuButton");
+            guideToggle.AddBinding("<Keyboard>/e");
+            guideToggle.Enable();
+        }
+
+        private void OnDisable()
+        {
+            NetworkedSpellGame.AnnouncementChanged -= OnAnnouncement;
+            if (guideToggle != null) { guideToggle.Disable(); guideToggle.Dispose(); guideToggle = null; }
+        }
+
+        private void Start()
+        {
+            StartCoroutine(RunTutorial());
+            StartCoroutine(DiagnosticLoop());
+        }
+
+        // Temporary: prints the networked game state to the Console every ~1.5s so the
+        // "no potions / cast bounces back" problem can be diagnosed from the logs.
+        private System.Collections.IEnumerator DiagnosticLoop()
+        {
+            var wait = new WaitForSeconds(1.5f);
+            while (true)
+            {
+                var g = NetworkedSpellGame.Instance;
+                var nm = Unity.Netcode.NetworkManager.Singleton;
+                Debug.Log("[TUT-DIAG] instance=" + (g != null)
+                    + " connected=" + (nm != null && nm.IsConnectedClient)
+                    + " active=" + (g != null && g.GameActive)
+                    + " myTurn=" + (g != null && g.IsLocalPlayersTurn)
+                    + " turnClient=" + (g != null ? g.CurrentTurnClientId.ToString() : "-")
+                    + " localId=" + (nm != null ? nm.LocalClientId.ToString() : "-")
+                    + " seatIdx=" + (g != null ? g.LocalSeatIndex.ToString() : "-")
+                    + " potions=" + CountPotions()
+                    + " cursed=" + (g != null && g.IsLocalPlayerCursed)
+                    + " announce=\"" + (g != null ? g.CurrentAnnouncement : "") + "\"");
+                yield return wait;
+            }
+        }
 
         private void OnAnnouncement(string _) { /* reserved for future step hooks */ }
 
-        // Guide Book can be toggled any time with E.
+        // Guide Book can be toggled any time with the controller button (or E).
         private void Update()
         {
-            Keyboard kb = Keyboard.current;
-            if (kb != null && kb.eKey.wasPressedThisFrame && controlsPanel != null)
+            if (guideToggle != null && guideToggle.WasPressedThisFrame() && controlsPanel != null)
             {
                 bool show = !controlsPanel.activeSelf;
                 ShowControls(show);
@@ -119,10 +164,10 @@ namespace WhoCastThat.Tutorial
         private IEnumerator RunTutorial()
         {
             // --- Step 1: guide book (press E) ---
-            SetBanner(1, "Welcome, wizard! Press <b>E</b> to open your Guide Book — flip through the controls, rules, cards and more.");
+            SetBanner(1, "Welcome, wizard! Press the <b>A / X</b> button on your controller to open your Guide Book — flip through the controls, rules, cards and more.");
             SetNext("Continue →", true);
             yield return WaitUntil(() => guideEverOpened);
-            SetBanner(1, "Use the <b>← →</b> arrows to flip pages. Reopen the book anytime with <b>E</b>. Press <b>→</b> when ready.");
+            SetBanner(1, "Use the <b>← →</b> arrows to flip pages. Reopen the book anytime with the <b>A / X</b> button. Press <b>→</b> when ready.");
             yield return WaitForAdvance();
             ShowControls(false);
 
@@ -136,12 +181,13 @@ namespace WhoCastThat.Tutorial
             SetBanner(3, "Take your seat. You're seated now — you can look around, but not walk off.");
             if (seatMarker != null) seatMarker.SetActive(false);
             SeatPlayerAtChair();                            // explicit, guaranteed placement in the chair
-            if (seatLock != null) seatLock.enabled = true;  // then lock locomotion for the round
+            LockLocomotion();                               // hard-disable walk/teleport, independent of network state
+            if (seatLock != null) seatLock.enabled = true;  // SeatLock also holds the leash while the game is active
             SetNext("Continue →", true);
             yield return WaitForAdvance();
 
             // --- Step 4: your hand ---
-            SetBanner(4, "This is your hand in the rack beside you: 5 potions, including one Counterspell — your lifesaver.");
+            SetBanner(4, "This is your hand in the rack in front of you: 5 potions, including one Counterspell - your lifesaver.");
             SetNext("Continue →", true);
             yield return WaitForAdvance();
 
@@ -221,6 +267,30 @@ namespace WhoCastThat.Tutorial
             if (had) cc.enabled = true;
         }
 
+        // Disable walk / teleport / climb locomotion so the player stays put in the chair
+        // (turning is left enabled). Works even if the networked game never becomes active,
+        // unlike SeatLock which only engages once GameActive is true.
+        private static readonly string[] LockedProviders =
+        {
+            "DynamicMoveProvider", "ContinuousMoveProvider", "TeleportationProvider",
+            "ClimbProvider", "GrabMoveProvider", "TwoHandedGrabMoveProvider",
+        };
+
+        private void LockLocomotion()
+        {
+            XROrigin rig = FindAnyObjectByType<XROrigin>();
+            if (rig == null) return;
+            foreach (MonoBehaviour mb in rig.GetComponentsInChildren<MonoBehaviour>(true))
+            {
+                if (mb == null || !mb.enabled) continue;
+                string n = mb.GetType().Name;
+                for (int i = 0; i < LockedProviders.Length; i++)
+                {
+                    if (n == LockedProviders[i]) { mb.enabled = false; break; }
+                }
+            }
+        }
+
         // ===================== Wait helpers (Next button always advances) =====================
 
         private IEnumerator WaitForAdvance()
@@ -272,6 +342,11 @@ namespace WhoCastThat.Tutorial
                 new Vector2(-26, 26), new Vector2(88, 72), out nextLabel);
             nextLabel.fontSize = 54;
             nextButton.onClick.AddListener(RequestAdvance);
+            // Just the arrow glyph — no square button background (still clickable via the transparent image).
+            nextButton.GetComponent<Image>().color = new Color(1f, 1f, 1f, 0f);
+            var ncb = nextButton.colors;
+            ncb.normalColor = ncb.highlightedColor = ncb.pressedColor = ncb.selectedColor = new Color(1f, 1f, 1f, 0f);
+            nextButton.colors = ncb;
 
             // Guide Book (opened with E) — a flip-book laid over the uploaded open-book image.
             controlsPanel = new GameObject("GuideBook", typeof(RectTransform), typeof(Image));
@@ -291,7 +366,7 @@ namespace WhoCastThat.Tutorial
             crt.anchorMin = new Vector2(0.5f, 0.5f); crt.anchorMax = new Vector2(0.5f, 0.5f);
             crt.pivot = new Vector2(0.5f, 0.5f);
             crt.anchoredPosition = new Vector2(0, 80);
-            crt.sizeDelta = new Vector2(1500, 1000);
+            crt.sizeDelta = new Vector2(1450, 997); // matches the 602x414 book image aspect so text sits on the pages
 
             Color ink = new Color(0.24f, 0.16f, 0.09f);
 
