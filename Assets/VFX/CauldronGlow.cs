@@ -42,19 +42,29 @@ public class CauldronGlow : MonoBehaviour
     {
         if (!glow) return;
 
+        // Outside Play Mode this settles on the resting value and then stops
+        // writing. intensity is a SERIALIZED property, so animating it in edit
+        // mode re-dirties the scene every frame and YeKai.unity never shows as
+        // clean - the same churn the Liquid.cs sharedMaterial fix removed, only
+        // relocated from the .mat to the .unity. The compare matters: assigning
+        // even an unchanged value each frame is enough to keep it dirty.
+        //
+        // The cost is that the flicker now previews in Play Mode rather than the
+        // Scene View. That is the cheaper half of the trade while three people
+        // are sharing this repo and scene YAML cannot be merged by hand.
+        if (!Application.isPlaying)
+        {
+            if (!Mathf.Approximately(glow.intensity, baseIntensity))
+                glow.intensity = baseIntensity;
+            return;
+        }
+
         // Two incommensurate frequencies so the pattern never audibly loops.
-        float t = Application.isPlaying ? Time.time : (float)UnityEditor_TimeSafe();
+        float t = Time.time;
         float a = Mathf.Sin(t * primarySpeed);
         float b = Mathf.Sin(t * secondarySpeed + 1.7f);
         float flicker = 1f + maxFlicker * (a * 0.6f + b * 0.4f);
 
         glow.intensity = baseIntensity * flicker;
-    }
-
-    // Time.time does not advance in edit mode, so fall back to realtime for the
-    // Scene View preview. Kept in one place so Update stays readable.
-    static double UnityEditor_TimeSafe()
-    {
-        return Time.realtimeSinceStartupAsDouble;
     }
 }

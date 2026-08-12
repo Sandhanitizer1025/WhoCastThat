@@ -73,6 +73,15 @@ public class PotionAura : MonoBehaviour
 
     void Update()
     {
+        // The pulse and the held-boost are runtime behaviour. glowLight.intensity
+        // is serialized, so driving it in edit mode would keep the scene dirty
+        // every frame. This is latent rather than live today - glowLight is
+        // deliberately left null now that the outline carries the type cue - but
+        // it bites the moment someone wires a Light back in, which the field's
+        // own tooltip invites. OnValidate still drives the colour preview, and
+        // that is the part that actually helps while authoring the profiles.
+        if (!Application.isPlaying) return;
+
         boost = Mathf.Lerp(boost, targetBoost, 1f - Mathf.Exp(-boostSmoothing * Time.deltaTime));
 
         // Offset by GetInstanceID so several potions in the same scene don't
