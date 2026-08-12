@@ -189,6 +189,12 @@ namespace WhoCastThat.Interactions
             lastAnnouncement = text;
         }
 
+        // Editor only. This is an IMGUI overlay drawn straight onto the eye buffers, so on a
+        // headset it hangs in the middle of the player's view with no way to dismiss it — and
+        // it prints Foresight, which is hidden information. The keyboard driver above is
+        // already useless on a Quest (no keyboard), so nothing is lost by cutting the whole
+        // panel out of the build rather than hiding it behind a flag a tester cannot reach.
+#if UNITY_EDITOR
         private void OnGUI()
         {
             const int w = 520;
@@ -233,5 +239,6 @@ namespace WhoCastThat.Interactions
 
             GUILayout.EndArea();
         }
+#endif
     }
 }
