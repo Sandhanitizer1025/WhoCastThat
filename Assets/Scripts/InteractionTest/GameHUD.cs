@@ -26,7 +26,9 @@ namespace WhoCastThat.Interactions
         [SerializeField] private bool billboardToLocalPlayer = true;
 
         private string announcement = "Waiting for the game to start...";
-        private string lastComposed;
+        private string lastComposed;   // the single-label path
+        private string lastPrompt;     // the two-label path, tracked per label
+        private string lastAnnouncement;
         private Camera billboardTarget;
 
         private void OnEnable()
@@ -96,11 +98,26 @@ namespace WhoCastThat.Interactions
 
             if (promptText != null)
             {
-                if (announcementText != null)
+                // Guarded like the combined path below: Compose runs every frame, and assigning
+                // TMP.text rebuilds the mesh even when the string is identical. That was already
+                // wasteful; with a countdown in the prompt it would rebuild both labels 72 times a
+                // second on a headset to show a number that changes ten times a second.
+                //
+                // The two labels are tracked separately on purpose. Gating the announcement on the
+                // prompt having changed would stall it whenever an announcement lands while the
+                // prompt happens to read the same — which is most of the game, since the prompt is
+                // a broad "waiting for X" for everyone but the active player.
+                if (force || prompt != lastPrompt)
                 {
+                    lastPrompt = prompt;
+                    promptText.text = prompt;
+                }
+
+                if (announcementText != null && (force || announcement != lastAnnouncement))
+                {
+                    lastAnnouncement = announcement;
                     announcementText.text = announcement;
                 }
-                promptText.text = prompt;
                 return;
             }
 
@@ -132,10 +149,24 @@ namespace WhoCastThat.Interactions
                 return "<color=#FF6B6B><b>YOU ARE CURSED</b> — drop a Counterspell on the table centre!</color>";
             }
 
-            // A spell is on the table and anyone holding an answer may play it, in or out of turn.
-            if (game.InterruptWindowOpen && !game.IsLocalPlayersTurn)
+            // A spell is on the table. Dispel is the ONLY card playable out of turn — Reflection
+            // is a your-turn copy and the authority refuses it here, so naming it in this prompt
+            // sent players hunting for a card that could not work.
+            //
+            // The window is short and can be skipped entirely, so a static line gives a player no
+            // way to pace the one real decision in it. Show it draining instead.
+            if (game.InterruptWindowOpen)
             {
-                return "<color=#9AD0FF>A spell is resolving — drop a <b>Dispel</b> or <b>Reflection</b> to answer it.</color>";
+                string clock = $"<b>{game.InterruptSecondsRemaining:0.0}s</b> " +
+                               InterruptBar(game.InterruptWindowFraction);
+
+                // The caster has nothing to play into their own window; they just watch.
+                if (game.IsLocalPlayersTurn)
+                {
+                    return $"<color=#B9A9D9>Your spell is on the table — resolving in {clock}</color>";
+                }
+
+                return $"<color=#9AD0FF><b>ANSWER IT</b> — drop a <b>Dispel</b> on the ring! {clock}</color>";
             }
 
             if (game.IsLocalPlayersTurn)
@@ -155,6 +186,17 @@ namespace WhoCastThat.Interactions
             }
 
             return $"<color=#B9A9D9>Waiting for {game.PlayerLabel(game.CurrentTurnClientId)}...</color>";
+        }
+
+        // A ten-cell drain bar. Deliberately plain ASCII: the font on this canvas is whatever a
+        // teammate assigned, and block-drawing characters like U+25B0 are not guaranteed to be in
+        // its atlas — a missing glyph renders as a hollow box, in the middle of the most
+        // time-critical prompt in the game. '=' and '-' are in every font.
+        private static string InterruptBar(float fraction)
+        {
+            const int cells = 10;
+            int filled = Mathf.Clamp(Mathf.CeilToInt(fraction * cells), 0, cells);
+            return $"[{new string('=', filled)}{new string('-', cells - filled)}]";
         }
 
         // Before the match starts this HUD would otherwise be blank — which is exactly the

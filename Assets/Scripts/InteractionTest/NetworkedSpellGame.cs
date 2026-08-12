@@ -77,10 +77,10 @@ namespace WhoCastThat.Interactions
         [SerializeField] private float slotInsertionDepth = 0.045f;
 
         [Header("Interrupts")]
-        [Tooltip("Seconds other players get to answer a cast spell with Dispel or Reflection. Skipped automatically if nobody holds one.")]
+        [Tooltip("Seconds other players get to answer a cast spell with a Dispel — the only card playable out of turn. Skipped automatically if nobody holds one.")]
         [SerializeField] private float interruptWindowSeconds = 3f;
 
-        [Tooltip("Safety cap on how long a Dispel/Reflection chain can get.")]
+        [Tooltip("Safety cap on how long a Dispel-answering-a-Dispel chain can get.")]
         [SerializeField] private int maxInterruptChain = 6;
 
         [Tooltip("Seconds the caster of a Tribute gets to pick their victim before one is chosen " +
@@ -189,6 +189,20 @@ namespace WhoCastThat.Interactions
         private readonly NetworkVariable<bool> interruptWindowOpen = new(
             false, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Owner);
 
+        // The interrupt window's deadline on the shared network clock. Replicated rather than
+        // broadcast per frame: every client runs its own countdown off this one number, which is
+        // the deterministic-local-animation-from-replicated-state rule.
+        private readonly NetworkVariable<double> interruptWindowEnd = new(
+            0d, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Owner);
+
+        // How long the window was opened for. This is NOT read from interruptWindowSeconds on the
+        // client: that is a serialized field, and a serialized field is a different value in every
+        // process (authority alternates between the main editor and the MPPM clone, which loads
+        // the scene from disk). Reading it locally would draw a bar that empties at the wrong rate
+        // on some machines and not others.
+        private readonly NetworkVariable<float> interruptWindowLength = new(
+            0f, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Owner);
+
         // Replicated mirror of the authority's cursed set, so each client's HUD can tell that
         // player "you are cursed — play a Counterspell" instead of only the shared status line.
         private readonly NetworkList<ulong> cursedNetwork = new(
@@ -216,8 +230,36 @@ namespace WhoCastThat.Interactions
         /// <summary>Turns the current player still owes; > 1 while they are under a Hex.</summary>
         public int TurnsRemaining => turnsRemaining.Value;
 
-        /// <summary>True while a cast spell can still be answered with Dispel or Reflection.</summary>
+        /// <summary>True while a cast spell can still be answered. Dispel is the only answer.</summary>
         public bool InterruptWindowOpen => interruptWindowOpen.Value;
+
+        /// <summary>
+        /// Seconds left to answer the spell on the table; 0 when no window is open. Computed from
+        /// the replicated deadline against the network clock, so it reads the same on every client.
+        /// </summary>
+        public float InterruptSecondsRemaining
+        {
+            get
+            {
+                if (!interruptWindowOpen.Value || NetworkManager == null || !NetworkManager.IsListening)
+                {
+                    return 0f;
+                }
+
+                double remaining = interruptWindowEnd.Value - NetworkManager.ServerTime.Time;
+                return remaining <= 0d ? 0f : (float)remaining;
+            }
+        }
+
+        /// <summary>Interrupt window remaining as 1 → 0, for drawing a bar. 0 when closed.</summary>
+        public float InterruptWindowFraction
+        {
+            get
+            {
+                float length = interruptWindowLength.Value;
+                return length <= 0f ? 0f : Mathf.Clamp01(InterruptSecondsRemaining / length);
+            }
+        }
 
         public ulong CurrentTurnClientId =>
             (turnOrder.Count > 0 && currentTurnIndex.Value >= 0 && currentTurnIndex.Value < turnOrder.Count)
@@ -1658,18 +1700,28 @@ namespace WhoCastThat.Interactions
             RestartWindow();
         }
 
+        // Every path that opens or reopens the window comes through here, so this is the one place
+        // the countdown's deadline has to be published. A Dispel restarts the window, and the bar
+        // on every client refills because this number moved.
         private void RestartWindow()
         {
             if (windowRoutine != null)
             {
                 StopCoroutine(windowRoutine);
             }
-            windowRoutine = StartCoroutine(ResolveAfterWindow());
+
+            float length = Mathf.Max(0.1f, interruptWindowSeconds);
+            interruptWindowLength.Value = length;
+            interruptWindowEnd.Value = NetworkManager.ServerTime.Time + length;
+
+            windowRoutine = StartCoroutine(ResolveAfterWindow(length));
         }
 
-        private IEnumerator ResolveAfterWindow()
+        // Takes the length rather than re-reading the field, so the coroutine that actually
+        // resolves the spell and the bar the players are watching can never disagree.
+        private IEnumerator ResolveAfterWindow(float length)
         {
-            yield return new WaitForSeconds(Mathf.Max(0.1f, interruptWindowSeconds));
+            yield return new WaitForSeconds(length);
             ResolvePending();
         }
 
@@ -1741,10 +1793,22 @@ namespace WhoCastThat.Interactions
                         ? "this ends the caster's turn."
                         : "the caster KEEPS the turn and must still draw to end it."));
 
-            // Remember what a Reflection would copy. Reflection itself is never recorded: it
-            // resolves INTO another spell, and that spell records itself on the way through, so
-            // reflecting a reflected Hex still copies the Hex rather than chasing its own tail.
-            if (type != PotionType.Reflection && type != PotionType.Dispel)
+            // Remember what a Reflection would copy. Four types are deliberately never recorded,
+            // so the reflectable set is exactly Hex, Phase, Warp, Foresight and Tribute:
+            //   Reflection   resolves INTO another spell, and that spell records itself on the way
+            //                through, so reflecting a reflected Hex still copies the Hex rather
+            //                than chasing its own tail.
+            //   Dispel       answers a spell rather than being one.
+            //   Counterspell answers a Curse. It cannot currently reach this method at all (the
+            //                curse-defence branch handles it and the "nothing to counter" case is
+            //                refused before the potion is spent), so listing it changes nothing
+            //                today — it is here so that making Counterspell resolve normally
+            //                cannot silently turn it into a reflectable card.
+            //   Curse        is only ever drawn, never cast, and reaching here would let a
+            //                Reflection copy it — which resolves as AddCurse(caster) and would
+            //                curse the reflector themselves.
+            if (type != PotionType.Reflection && type != PotionType.Dispel &&
+                type != PotionType.Counterspell && type != PotionType.Curse)
             {
                 lastResolvedSpell.Value = (int)type;
             }
