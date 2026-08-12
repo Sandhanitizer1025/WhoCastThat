@@ -16,6 +16,8 @@ GameObject:
   - component: {fileID: 8011441553124753889}
   - component: {fileID: 3047943860411249218}
   - component: {fileID: 6961080506283535245}
+  - component: {fileID: 8606804420620521853}
+  - component: {fileID: 105024810566618592}
   m_Layer: 0
   m_Name: NetworkedPotion
   m_TagString: Untagged
@@ -385,6 +387,48 @@ MonoBehaviour:
   labelHeight: 0.143
   returnGraceSeconds: 1.5
   returnFlightSeconds: 0.35
+  showCastableGlow: 1
+  castableGlowColor: {r: 0.35, g: 1, b: 0.45, a: 0.85}
+  glowRingDiameter: 0.048
+  glowRingRise: 0.046
+  glowCheckInterval: 0.15
+--- !u!114 &8606804420620521853
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 592917901370543573}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 65a0334dfc9fe5b47aa477d69640dab7, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  potionColour: {r: 0.2, g: 0.9, b: 1, a: 1}
+  liquidRenderer: {fileID: 3101467361965880604}
+  motes: []
+  outlineRenderer: {fileID: 0}
+  glowLight: {fileID: 0}
+  trail: {fileID: 0}
+  outlineWidth: 0.0006
+  pulseSpeed: 1.1
+  pulseDepth: 0.25
+  baseLightIntensity: 0.6
+  heldBoost: 1.7
+  boostSmoothing: 6
+--- !u!114 &105024810566618592
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 592917901370543573}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 08edcb408158e7643a5c2f6c8bec8763, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  library: {fileID: 11400000, guid: 3d2c52dfd38c81045ba2380f6472745b, type: 2}
 --- !u!1 &707365076130611540
 GameObject:
   m_ObjectHideFlags: 0

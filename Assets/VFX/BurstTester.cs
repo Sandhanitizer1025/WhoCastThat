@@ -13,6 +13,13 @@ public class BurstTester : MonoBehaviour
 
     void Update()
     {
+#if !UNITY_EDITOR
+        // Never in a build. Bare Space collides with the XR device simulator, and
+        // MultiplayerTestHarness had to put every one of its keys behind Left Ctrl
+        // for the same reason. A tester on a headset pressing Space should not be
+        // firing debug particles.
+        return;
+#else
         var kb = Keyboard.current;
         if (kb != null && kb.spaceKey.wasPressedThisFrame)
         {
@@ -24,5 +31,6 @@ public class BurstTester : MonoBehaviour
                 ps.Play(true);
             }
         }
+#endif
     }
 }

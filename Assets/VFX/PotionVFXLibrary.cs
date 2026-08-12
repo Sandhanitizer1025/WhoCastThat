@@ -2,8 +2,12 @@ using UnityEngine;
 
 // Single lookup point for "what does a Hex look like?". Create ONE asset via
 //   Assets > Create > Who Cast That > Potion VFX Library
-// drop all nine profiles in, and reference it from PotionGameManager instead of
-// keeping nine differently-decorated prefabs in sync by hand.
+// and drop all nine profiles in, instead of keeping nine differently-decorated
+// prefabs in sync by hand.
+//
+// In the live game this is read by PotionAuraBinder on the potion prefab, off
+// NetworkedPotion's replicated type. NOT by PotionGameManager - that class is
+// legacy, pre-networking, and no real match runs it.
 [CreateAssetMenu(menuName = "Who Cast That/Potion VFX Library", fileName = "PotionVFXLibrary")]
 public class PotionVFXLibrary : ScriptableObject
 {
