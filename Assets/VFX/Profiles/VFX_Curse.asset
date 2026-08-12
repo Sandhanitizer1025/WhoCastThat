@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: VFX_Curse
   m_EditorClassIdentifier: 
   type: 8
-  primary: {r: 0.55, g: 0.04, b: 0.1, a: 1}
+  primary: {r: 0.4, g: 0.03, b: 0.55, a: 1}
   secondary: {r: 0, g: 0, b: 0, a: 1}
   motion: 8
   duration: 2

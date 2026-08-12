@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: VFX_Warp
   m_EditorClassIdentifier: 
   type: 4
-  primary: {r: 0.74749994, g: 0.3335, b: 1.15, a: 1}
+  primary: {r: 0.345, g: 0.5175, b: 1.15, a: 1}
   secondary: {r: 0, g: 0, b: 0, a: 1}
   motion: 4
   duration: 1.1
