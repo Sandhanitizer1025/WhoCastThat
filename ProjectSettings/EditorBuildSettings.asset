@@ -30,6 +30,9 @@ EditorBuildSettings:
     path: Assets/Scenes/TutorialScene.unity
     guid: 713e4961b11039d4184edffb9bb99809
   - enabled: 1
+    path: Assets/Scenes/LobbyMirrorScene.unity
+    guid: d3d507be01bf0b245915b4544cd117ad
+  - enabled: 1
     path: Assets/Scenes/InteractionTestScene.unity
     guid: 45edf677afeb06844bffb132baa49914
   m_configObjects:
