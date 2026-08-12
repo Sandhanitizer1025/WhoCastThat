@@ -15,8 +15,16 @@ using UnityEditor.SceneManagement;
 /// </summary>
 public class MagicMirrorMenu : MonoBehaviour
 {
+    [Header("Scenes")]
+    public string gameSceneName = "InteractionTestScene";
+    public string tutorialSceneName = "TutorialScene";
+    public string bootSceneName = "BootScene";
+
     [Header("Buttons")]
     public Button playButton;
+    // Host and Join are no longer built into the menu, but these fields must stay: MirrorMenuRouter
+    // reaches the buttons through them, so deleting the fields would stop that file compiling.
+    // They are simply left unassigned, and every use of them is null-guarded.
     public Button hostButton;
     public Button joinButton;
     public Button howToButton;
@@ -25,7 +33,14 @@ public class MagicMirrorMenu : MonoBehaviour
     public Button backButton;
 
     [Header("Panels")]
+    public GameObject mainPanel;
+    public GameObject settingsPanel;
     public GameObject howToPanel;
+
+    [Header("Settings sliders")]
+    public Slider masterVolumeSlider;
+    public Slider musicVolumeSlider;
+    public Slider sfxVolumeSlider;
 
     void Awake()
     {
@@ -37,6 +52,11 @@ public class MagicMirrorMenu : MonoBehaviour
         Wire(quitButton, OnQuit);
         Wire(backButton, OnBack);
 
+        WireSlider(masterVolumeSlider, GameAudioSettings.Master, GameAudioSettings.SetMaster);
+        WireSlider(musicVolumeSlider, GameAudioSettings.Music, GameAudioSettings.SetMusic);
+        WireSlider(sfxVolumeSlider, GameAudioSettings.Sfx, GameAudioSettings.SetSfx);
+
+        ShowSettings(false);
         if (howToPanel != null) howToPanel.SetActive(false);
     }
 
@@ -47,29 +67,45 @@ public class MagicMirrorMenu : MonoBehaviour
         b.onClick.AddListener(action);
     }
 
-    // --- Button handlers ---------------------------------------------------
-
-    public void OnPlay()     { Debug.Log("[MirrorMenu] Play pressed. TODO: start the game / load the play area."); }
-    public void OnHost()     { Debug.Log("[MirrorMenu] Host pressed. TODO: create a networked session."); }
-    public void OnJoin()     { Debug.Log("[MirrorMenu] Join pressed. TODO: browse / join a session."); }
-    public void OnSettings() { Debug.Log("[MirrorMenu] Settings pressed. TODO: open settings panel."); }
-
-    public void OnHowToPlay()
+    static void WireSlider(Slider s, float saved, UnityEngine.Events.UnityAction<float> action)
     {
-        Debug.Log("[MirrorMenu] Loading TutorialScene...");
-        UnityEngine.SceneManagement.SceneManager.LoadScene("TutorialScene");
+        if (s == null) return;
+        s.SetValueWithoutNotify(saved);   // showing the saved value must not re-save it
+        s.onValueChanged.RemoveListener(action);
+        s.onValueChanged.AddListener(action);
     }
 
-    public void OnBack() { if (howToPanel != null) howToPanel.SetActive(false); }
-
-    public void OnQuit()
+    void ShowSettings(bool visible)
     {
-        Debug.Log("[MirrorMenu] Quit pressed.");
-#if UNITY_EDITOR
-        UnityEditor.EditorApplication.isPlaying = false;
-#else
-        Application.Quit();
-#endif
+        if (settingsPanel != null) settingsPanel.SetActive(visible);
+        if (mainPanel != null) mainPanel.SetActive(!visible);
+    }
+
+    static void Load(string sceneName)
+    {
+        Debug.Log("[MirrorMenu] Loading " + sceneName + "...");
+        UnityEngine.SceneManagement.SceneManager.LoadScene(sceneName);
+    }
+
+    // --- Button handlers ---------------------------------------------------
+
+    public void OnPlay()      { Load(gameSceneName); }
+    public void OnHowToPlay() { Load(tutorialSceneName); }
+    public void OnSettings()  { ShowSettings(true); }
+
+    // Quit returns to the boot screen rather than closing the app: on a headset Application.Quit()
+    // drops the player straight out to the system menu, which reads as a crash.
+    public void OnQuit()      { Load(bootSceneName); }
+
+    // Host and Join are no longer offered by this menu. The handlers remain because the public
+    // button fields do; they are unreachable unless something assigns those buttons again.
+    public void OnHost()      { Debug.Log("[MirrorMenu] Host pressed, but hosting is not offered by this menu."); }
+    public void OnJoin()      { Debug.Log("[MirrorMenu] Join pressed, but joining is not offered by this menu."); }
+
+    public void OnBack()
+    {
+        ShowSettings(false);
+        if (howToPanel != null) howToPanel.SetActive(false);
     }
 
 #if UNITY_EDITOR
@@ -106,7 +142,8 @@ public class MagicMirrorMenu : MonoBehaviour
         var canvas = root.AddComponent<Canvas>();
         canvas.renderMode = RenderMode.WorldSpace;
         root.AddComponent<CanvasScaler>().dynamicPixelsPerUnit = 3f;
-        root.AddComponent<GraphicRaycaster>();
+        // XR-only raycaster. A plain GraphicRaycaster alongside the tracked-device one can fight
+        // over UI input in VR (it wants a screen/event camera), so the menu uses only the XR raycaster.
         AddXRRaycaster(root);
         var rrt = root.GetComponent<RectTransform>();
         rrt.sizeDelta = new Vector2(1000f, 1800f);
@@ -121,18 +158,35 @@ public class MagicMirrorMenu : MonoBehaviour
         Label("Title", main.transform, "WHO CAST THAT?", 82, Accent, new Vector2(0, 720), new Vector2(940, 160), FontStyles.Bold);
         Label("Subtitle", main.transform, "A Magical Duel of Potions", 34, TextCol, new Vector2(0, 620), new Vector2(940, 70), FontStyles.Italic);
 
-        string[] labels = { "Play", "Host", "Join", "How to Play", "Settings", "Quit" };
-        float y = 430f, step = 170f;
-        var buttons = new Button[6];
+        // Host and Join are deliberately absent: the mirror sends the player straight into a scene.
+        string[] labels = { "Play", "How to Play", "Settings", "Quit" };
+        float y = 400f, step = 180f;
+        var buttons = new Button[labels.Length];
         for (int i = 0; i < labels.Length; i++)
             buttons[i] = MakeButton(labels[i], main.transform, new Vector2(0, y - i * step), new Vector2(700, 140));
 
+        menu.mainPanel      = main;
         menu.playButton     = buttons[0];
-        menu.hostButton     = buttons[1];
-        menu.joinButton     = buttons[2];
-        menu.howToButton    = buttons[3];
-        menu.settingsButton = buttons[4];
-        menu.quitButton     = buttons[5];
+        menu.howToButton    = buttons[1];
+        menu.settingsButton = buttons[2];
+        menu.quitButton     = buttons[3];
+        menu.hostButton     = null;   // see the field comments: kept for MirrorMenuRouter, left unassigned
+        menu.joinButton     = null;
+
+        // Settings panel ----------------------------------------------------
+        // A sibling of MainPanel that swaps places with it, so the mirror never shows both.
+        var settings = Panel("SettingsPanel", rrt, PanelBg);
+        Stretch(settings.GetComponent<RectTransform>());
+        menu.settingsPanel = settings;
+
+        Label("SettingsTitle", settings.transform, "SETTINGS", 72, Accent, new Vector2(0, 720), new Vector2(940, 140), FontStyles.Bold);
+
+        menu.masterVolumeSlider = VolumeRow("Master", settings.transform, 470f, GameAudioSettings.MasterDefault);
+        menu.musicVolumeSlider  = VolumeRow("Music",  settings.transform, 250f, GameAudioSettings.MusicDefault);
+        menu.sfxVolumeSlider    = VolumeRow("Sound Effects", settings.transform, 30f, GameAudioSettings.SfxDefault);
+
+        menu.backButton = MakeButton("Back", settings.transform, new Vector2(0, -280), new Vector2(500, 130));
+        settings.SetActive(false);
 
         // "How to Play" now teleports to the Tutorial scene, so no in-menu overlay is built here.
 
@@ -145,8 +199,20 @@ public class MagicMirrorMenu : MonoBehaviour
     static void AddXRRaycaster(GameObject go)
     {
         var t = System.Type.GetType("UnityEngine.XR.Interaction.Toolkit.UI.TrackedDeviceGraphicRaycaster, Unity.XR.Interaction.Toolkit");
-        if (t != null) go.AddComponent(t);
-        else Debug.LogWarning("[MirrorMenu] TrackedDeviceGraphicRaycaster not found; VR ray-clicking may need it added manually.");
+        if (t == null)
+        {
+            Debug.LogWarning("[MirrorMenu] TrackedDeviceGraphicRaycaster not found; VR ray-clicking may need it added manually.");
+            return;
+        }
+
+        var comp = go.AddComponent(t);
+
+        // Never let a 3D collider (the mirror mesh, a hand, etc.) occlude the world-space UI ray —
+        // an occluded raycast silently blocks button presses, and headsets can differ from the
+        // simulator here. Clearing the blocking mask makes the menu reliably hittable.
+        var so = new UnityEditor.SerializedObject(comp);
+        var mask = so.FindProperty("m_BlockingMask");
+        if (mask != null) { mask.intValue = 0; so.ApplyModifiedPropertiesWithoutUndo(); }
     }
 
     static GameObject Panel(string name, Transform parent, Color color)
@@ -172,7 +238,7 @@ public class MagicMirrorMenu : MonoBehaviour
         var tmp = go.AddComponent<TextMeshProUGUI>();
         tmp.text = text; tmp.fontSize = size; tmp.color = color; tmp.fontStyle = style;
         tmp.alignment = TextAlignmentOptions.Center;
-        tmp.enableWordWrapping = true;
+        tmp.textWrappingMode = TextWrappingModes.Normal;
         return tmp;
     }
 
@@ -196,6 +262,54 @@ public class MagicMirrorMenu : MonoBehaviour
         var txt = Label("Text", go.transform, label, 46, TextCol, Vector2.zero, size, FontStyles.Bold);
         Stretch(txt.GetComponent<RectTransform>());
         return btn;
+    }
+
+    /// <summary>A caption with a volume slider under it, as one settings row.</summary>
+    static Slider VolumeRow(string caption, Transform parent, float y, float value)
+    {
+        Label(caption + "Label", parent, caption, 40, TextCol, new Vector2(0, y), new Vector2(760, 60), FontStyles.Normal);
+        return MakeSlider(caption, parent, new Vector2(0, y - 80f), new Vector2(760, 56), value);
+    }
+
+    static Slider MakeSlider(string name, Transform parent, Vector2 pos, Vector2 size, float value)
+    {
+        var go = new GameObject(name + "Slider", typeof(RectTransform));
+        go.transform.SetParent(parent, false);
+        var rt = go.GetComponent<RectTransform>();
+        rt.anchoredPosition = pos; rt.sizeDelta = size;
+
+        var bg = Panel("Background", go.transform, new Color(0.10f, 0.05f, 0.20f, 0.95f));
+        Stretch(bg.GetComponent<RectTransform>());
+
+        // Fill and handle are driven by Slider itself, which rewrites their anchors from the value.
+        var fillArea = new GameObject("Fill Area", typeof(RectTransform));
+        fillArea.transform.SetParent(go.transform, false);
+        Stretch(fillArea.GetComponent<RectTransform>());
+        var fill = Panel("Fill", fillArea.transform, Accent);
+        var fillRt = fill.GetComponent<RectTransform>();
+        fillRt.anchorMin = Vector2.zero; fillRt.anchorMax = new Vector2(0f, 1f);
+        fillRt.offsetMin = Vector2.zero; fillRt.offsetMax = Vector2.zero;
+
+        var handleArea = new GameObject("Handle Slide Area", typeof(RectTransform));
+        handleArea.transform.SetParent(go.transform, false);
+        Stretch(handleArea.GetComponent<RectTransform>());
+        var handle = Panel("Handle", handleArea.transform, BtnHi);
+        var handleRt = handle.GetComponent<RectTransform>();
+        handleRt.anchorMin = Vector2.zero; handleRt.anchorMax = new Vector2(0f, 1f);
+        handleRt.sizeDelta = new Vector2(56f, 0f);
+
+        var slider = go.AddComponent<Slider>();
+        slider.fillRect = fillRt;
+        slider.handleRect = handleRt;
+        slider.targetGraphic = handle.GetComponent<Image>();
+        slider.direction = Slider.Direction.LeftToRight;
+        slider.minValue = 0f; slider.maxValue = 1f;
+        slider.value = value;
+
+        var cb = slider.colors;
+        cb.normalColor = BtnHi; cb.highlightedColor = Color.white; cb.pressedColor = BtnPress;
+        slider.colors = cb;
+        return slider;
     }
 #endif
 }
