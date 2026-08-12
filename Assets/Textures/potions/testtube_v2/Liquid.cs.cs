@@ -37,6 +37,7 @@ public class Liquid : MonoBehaviour
     float sinewave;
     float time = 0.5f;
     Vector3 comp;
+    MaterialPropertyBlock mpb;
 
     // Use this for initialization
     void Start()
@@ -105,12 +106,11 @@ public class Liquid : MonoBehaviour
             wobbleAmountToAddZ += Mathf.Clamp((velocity.z + (velocity.y * 0.2f) + angularVelocity.x + angularVelocity.y) * MaxWobble, -MaxWobble, MaxWobble);
         }
 
-        // send it to the shader
-        rend.sharedMaterial.SetFloat("_WobbleX", wobbleAmountX);
-        rend.sharedMaterial.SetFloat("_WobbleZ", wobbleAmountZ);
-
         // set fill amount
         UpdatePos(deltaTime);
+
+        // Send wobble + fill to the shader in ONE property-block write.
+        ApplyToRenderer();
 
         // keep last position
         lastPos = transform.position;
@@ -139,7 +139,32 @@ public class Liquid : MonoBehaviour
         {
             pos = worldPos - transform.position - new Vector3(0, fillAmount, 0);
         }
-        rend.sharedMaterial.SetVector("_FillAmount", pos);
+        // NOTE: no longer written here - ApplyToRenderer() sends it, so that
+        // wobble and fill go out as a single property-block update per frame.
+    }
+
+    // Writes to a MaterialPropertyBlock instead of rend.sharedMaterial.
+    //
+    // sharedMaterial is the .mat ASSET, and this component is [ExecuteInEditMode],
+    // so the old version rewrote that asset on disk every editor frame - which
+    // made "Shader Graphs_fake liquid.mat" show up as permanently modified in
+    // GitHub Desktop and put it on a collision course with everyone else's edits.
+    // It also meant all test tubes shared one wobble value, so they sloshed in
+    // lockstep no matter how they were actually being moved.
+    void ApplyToRenderer()
+    {
+        if (rend == null) return;
+        if (mpb == null) mpb = new MaterialPropertyBlock();
+
+        // GetPropertyBlock FIRST - SetPropertyBlock replaces the whole block, so
+        // reading it back preserves properties other scripts put there (notably
+        // PotionAura's _TopColour/_SideColour). Drop this and the potion colours
+        // get wiped every frame.
+        rend.GetPropertyBlock(mpb);
+        mpb.SetFloat("_WobbleX", wobbleAmountX);
+        mpb.SetFloat("_WobbleZ", wobbleAmountZ);
+        mpb.SetVector("_FillAmount", pos);
+        rend.SetPropertyBlock(mpb);
     }
 
     //https://forum.unity.com/threads/manually-calculate-angular-velocity-of-gameobject.289462/#post-4302796
