@@ -163,13 +163,6 @@ namespace WhoCastThat.Interactions
         private readonly NetworkVariable<ulong> tributeChooser = new(
             NoPlayer, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Owner);
 
-        // Size of the Hex the current player is under, or 0 if they are taking an ordinary turn.
-        // This CANNOT be derived from turnsRemaining: a normal turn and the final owed turn of an
-        // attack both read 1, yet hexing from the first must pass on 2 and from the second 4+.
-        // Tracking the attack itself gives the 2 -> 4 -> 6 ladder regardless of when it is played.
-        private readonly NetworkVariable<int> hexAttackSize = new(
-            0, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Owner);
-
         private readonly NetworkVariable<bool> gameActive = new(
             false, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Owner);
 
@@ -587,7 +580,6 @@ namespace WhoCastThat.Interactions
             // the same player the first move (and the first Curse risk) every single match.
             currentTurnIndex.Value = turnOrder.Count > 0 ? UnityEngine.Random.Range(0, turnOrder.Count) : 0;
             turnsRemaining.Value = 1;
-            hexAttackSize.Value = 0;
             cursePlacementPlayer.Value = NoPlayer;
             tributePayer.Value = NoPlayer;
             tributeReceiver.Value = NoPlayer;
@@ -1761,10 +1753,14 @@ namespace WhoCastThat.Interactions
             {
                 case PotionType.Hex:
                 {
-                    // Attack: forfeit your turns and pile them onto the target. The target takes
-                    // the attack you were under plus two, so an unhexed caster passes on 2 and the
-                    // ladder runs 2 -> 4 -> 6 however late in your owed turns you play it.
-                    int pass = hexAttackSize.Value + 2;
+                    // Attack: forfeit every turn you still owe and pile them onto the target,
+                    // plus two. WHEN you play it matters — hexing on the first of four owed turns
+                    // passes on 6, hexing on the last of them passes on 3. An ordinary unhexed
+                    // turn owes 1, so the base case is 3.
+                    //
+                    // Read turnsRemaining BEFORE zeroing it below: it is the whole input to the
+                    // sum, and MoveToPlayer overwrites it for the target a moment later.
+                    int pass = turnsRemaining.Value + 2;
                     turnsRemaining.Value = 0;
                     SetAnnouncement($"{PlayerLabel(casterId)} hexes {PlayerLabel(targetId)} — {pass} turns in a row!");
                     MoveToPlayer(targetId, pass);
@@ -2314,7 +2310,6 @@ namespace WhoCastThat.Interactions
 
             currentTurnIndex.Value = index;
             turnsRemaining.Value = Mathf.Max(1, turns);
-            hexAttackSize.Value = 0; // play reached them normally, so they are not under a Hex
             LogCast($"TURN PASSED to {PlayerLabel(CurrentTurnClientId)} for {turnsRemaining.Value} turn(s).");
             AnnounceCurrentTurn();
         }
@@ -2334,9 +2329,7 @@ namespace WhoCastThat.Interactions
             drawInProgress = false;
             currentTurnIndex.Value = index;
             turnsRemaining.Value = Mathf.Max(1, turns);
-            hexAttackSize.Value = turnsRemaining.Value; // they are now under a Hex of this size
-            LogCast($"TURN FORCED to {PlayerLabel(playerId)} for {turnsRemaining.Value} turn(s) " +
-                    $"(hex attack size {hexAttackSize.Value}).");
+            LogCast($"TURN FORCED to {PlayerLabel(playerId)} for {turnsRemaining.Value} turn(s).");
             AnnounceCurrentTurn();
         }
 
