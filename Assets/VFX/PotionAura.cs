@@ -45,6 +45,17 @@ public class PotionAura : MonoBehaviour
     [SerializeField] float pulseDepth = 0.25f;
     [SerializeField] float baseLightIntensity = 0.6f;
 
+    [Header("Liquid brightness")]
+    [Tooltip("The liquid shader is Unlit, so it has no emission port and there is " +
+             "no Bloom in the project to feed - 'glow' here means lifting the " +
+             "colour's VALUE toward full brightness while keeping its hue and " +
+             "saturation. Value is lerped rather than multiplied because HDR is " +
+             "off: a plain multiply clips the bright cards to white, while this " +
+             "leaves them nearly alone and lifts the dark ones, which are the " +
+             "ones that need it. 0 = exactly the profile colour, 1 = fully bright.")]
+    [Range(0f, 1f)]
+    [SerializeField] float liquidGlow = 0.35f;
+
     [Header("Held")]
     [Tooltip("Glow multiplier while the player is holding it.")]
     [SerializeField] float heldBoost = 1.7f;
@@ -126,6 +137,20 @@ public class PotionAura : MonoBehaviour
         ApplyColour();
     }
 
+    // Lifts a colour's brightness while leaving hue and saturation alone, so the
+    // liquid can read as lit-from-within without drifting toward white the way a
+    // straight multiply does as soon as a channel clips at 1.0. Only the liquid
+    // uses this - the outline stays on the exact profile colour, because it is the
+    // type cue and it has to stay comparable between cards.
+    static Color Brighten(Color c, float amount)
+    {
+        if (amount <= 0f) return c;
+        Color.RGBToHSV(c, out float h, out float s, out float v);
+        Color lifted = Color.HSVToRGB(h, s, Mathf.Lerp(v, 1f, amount));
+        lifted.a = c.a;
+        return lifted;
+    }
+
     void ApplyColour()
     {
         // Lazy init - OnValidate can fire before Awake in the editor.
@@ -147,8 +172,8 @@ public class PotionAura : MonoBehaviour
         if (liquidRenderer)
         {
             liquidRenderer.GetPropertyBlock(mpb);
-            mpb.SetColor(TopColour, potionColour);
-            mpb.SetColor(SideColour, side);
+            mpb.SetColor(TopColour, Brighten(potionColour, liquidGlow));
+            mpb.SetColor(SideColour, Brighten(side, liquidGlow));
             liquidRenderer.SetPropertyBlock(mpb);
         }
 

@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: VFX_Tribute
   m_EditorClassIdentifier: 
   type: 1
-  primary: {r: 1.15, g: 0.3565, b: 0.73599994, a: 1}
+  primary: {r: 0.788, g: 0.761, b: 0.169, a: 1}
   secondary: {r: 0, g: 0, b: 0, a: 1}
   motion: 1
   duration: 0.9

@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: VFX_Hex
   m_EditorClassIdentifier: 
   type: 0
-  primary: {r: 1.25, g: 0.2875, b: 0.112500004, a: 1}
+  primary: {r: 0.361, g: 0.29, b: 0.086, a: 1}
   secondary: {r: 0, g: 0, b: 0, a: 1}
   motion: 0
   duration: 0.6
