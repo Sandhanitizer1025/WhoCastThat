@@ -310,7 +310,7 @@ ParticleSystem:
       serializedVersion: 2
       minMaxState: 0
       minColor: {r: 1, g: 1, b: 1, a: 1}
-      maxColor: {r: 1.25, g: 0.2875, b: 0.112500004, a: 1}
+      maxColor: {r: 0.722, g: 0.58, b: 0.172, a: 1}
       maxGradient:
         serializedVersion: 2
         key0: {r: 1, g: 1, b: 1, a: 1}
@@ -4940,7 +4940,7 @@ PrefabInstance:
     - target: {fileID: 2725425603913671436, guid: 29a51ab55f46b644cbf726397c93693c,
         type: 3}
       propertyPath: m_Name
-      value: testtube_potionShape 1 Variant
+      value: Potion_Hex
       objectReference: {fileID: 0}
     - target: {fileID: 5276826952328000647, guid: 29a51ab55f46b644cbf726397c93693c,
         type: 3}
@@ -5031,7 +5031,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 65a0334dfc9fe5b47aa477d69640dab7, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  potionColour: {r: 1.25, g: 0.2875, b: 0.112500004, a: 1}
+  potionColour: {r: 0.722, g: 0.58, b: 0.172, a: 1}
   liquidRenderer: {fileID: 5120383411588643017}
   motes:
   - {fileID: 367673218969772846}
@@ -5042,6 +5042,7 @@ MonoBehaviour:
   pulseSpeed: 1.4
   pulseDepth: 0.3
   baseLightIntensity: 0.7
+  liquidGlow: 0.35
   heldBoost: 1.7
   boostSmoothing: 6
 --- !u!114 &5706620845082363542

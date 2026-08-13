@@ -3,8 +3,10 @@
 Working doc for continuing the visual-effects work on **Who Cast That?!**
 Written for a fresh session with no prior context.
 
-> **Last updated:** 12 Aug 2026, after the Curse/Warp recolour and the
-> `Potion_<Ability>` rename + prefab-variant pass.
+> **Last updated:** 13 Aug 2026. Covers the Curse/Warp recolour, the
+> `Potion_<Ability>` rename + prefab-variant pass, and the PR #32 merge to `main`.
+> **Next task: recolour the tubes again — see §6 Priority 1, and read the
+> ⚠️ procedure-changed box there before touching anything.**
 > Sections marked ⚠️ correct claims made in earlier versions of this doc that turned
 > out to be wrong.
 
@@ -40,8 +42,9 @@ the VFX work targets `testtube_potionShape` objects.
 
 ### Team / branch context
 
-- Working branch: **`YK8`** (Tan Ye Kai). Main branch is `main`.
-  ⚠️ Earlier versions of this doc said `YK7`. The branch moved to `YK8` mid-session.
+- Working branch: **`YK9`** (Tan Ye Kai), branched from the merged `main`.
+  Main branch is `main`. ⚠️ The branch has moved twice — earlier versions of this doc
+  said `YK7`, then `YK8`. `YK8` is merged (PR #32) and finished; see §4f.
 - Teammates own other scenes — **`RaphaelScene.unity`**, **`zelda.unity`**,
   `LobbyScene.unity`, `BootScene.unity`. **Do not touch these.**
 - VFX work is confined to **`Assets/Scenes/YeKai.unity`**, `Assets/VFX/`, and
@@ -209,15 +212,43 @@ after verifying it was redundant:
 stash@{0} = stash-backup-YK7 = stash-backup-YK7-tag = 5b364ff
 ```
 
-Its `YeKai.unity` was 11,222 lines vs the current 56,857 — restoring it would have
+Its `YeKai.unity` was 11,222 lines vs the then-current 56,857 — restoring it would have
 destroyed the session's work. **Do not click Restore** if Desktop offers it again.
 
 Safety refs `stash-backup-YK7` (branch) and `stash-backup-YK7-tag` still exist at
-`5b364ff`. Delete once the work is pushed and verified:
+`5b364ff`. The work they were guarding is now merged to `main`, so they are safe to
+delete whenever you like:
 
 ```bash
 git branch -D stash-backup-YK7 && git tag -d stash-backup-YK7-tag
 ```
+
+### 4f. Branch state as of 13 Aug 2026
+
+`YK8` was merged into `main` via **PR #32** (`3be1a5f`). Work has moved to **`YK9`**,
+branched from the merged `main`.
+
+That PR initially blocked on a conflict in `Assets/Scripts/Flow.meta`. Worth
+understanding, because the same thing will happen again with any new folder:
+
+- The file did not exist at the merge base. Unity generates a `.meta` per **folder**
+  holding a random GUID, and `main` and `YK8` each generated their own.
+- Two branches adding the same path with different content is an **add/add conflict**.
+  Git cannot auto-merge it, and it shows up **only on the GitHub PR page** — the local
+  branch looks perfectly clean, which is what makes it confusing.
+- Fixed in `988ac58` by setting `YK8`'s copy byte-identical to `main`'s
+  (`guid: a7dcb57456355bd4483e63d9ef5fcf18`). When both sides match, the conflict
+  resolves itself — no merge commit, no web editor.
+- Neither folder GUID was referenced by any asset, so the choice was free. **Taking
+  `main`'s value is the default** — it keeps churn off teammates.
+
+⚠️ **Scene line count is no longer a health signal.** `YeKai.unity` went 56,857 →
+~2,000 lines, which looks alarming and is completely fine: the nine tubes became
+prefab variants, so ~45,600 lines of inline object data moved out of the scene and
+into `Assets/Prefabs/Potion_*.prefab`. Inline `GameObject:` blocks dropped 33 → 3
+while `PrefabInstance:` held steady at 20. The three remaining plain GameObjects are
+`Main Camera`, `Directional Light` and `Cube`; everything else is a prefab instance.
+**Judge the scene by root-object count in the editor, not by file size.**
 
 ---
 
@@ -316,7 +347,74 @@ re-read back and confirmed to carry `testtube_outline_hull` +
 No script resolves these tubes by name (`GameObject.Find` was grepped across
 `Assets/Scripts/`), so the rename broke no lookups.
 
-### ⭐ Priority 1 — Decide what happens to the SECOND tube rack
+### ⭐ Priority 1 — Recolour the tubes again (THE NEXT TASK)
+
+**This is what the next session is for.** The owner wants to change the potion
+colours again. The current palette is the table in §5.
+
+#### ⚠️ Read this first — the procedure CHANGED on 12 Aug 2026
+
+Colour used to live in exactly one place. It now lives in **three**, because the nine
+tubes became prefab variants:
+
+| Where | What holds the colour | Persists? |
+|---|---|---|
+| `Assets/VFX/Profiles/VFX_<Type>.asset` | `primary` — the source of truth | yes |
+| `Assets/Prefabs/Potion_<Type>.prefab` | `PotionAura.potionColour`, serialized | yes |
+| The scene instance in `YeKai.unity` | may carry a `potionColour` **override** | yes |
+| The renderer's `MaterialPropertyBlock` | what you actually SEE | **no — runtime only** |
+
+The old instructions ("edit the profile, re-run `ApplyProfile` on the tube, save the
+scene") are now **incomplete**. Editing only the scene instance leaves the prefab
+asset stale, so anything spawned from the prefab gets the old colour. Editing only the
+profile changes nothing visible at all, because nothing re-reads it automatically.
+
+#### Recommended order
+
+1. **Edit `primary`** in `Assets/VFX/Profiles/VFX_<Type>.asset`. This is the source of
+   truth — always change it, even though nothing reads it at runtime yet.
+2. **Push it into the prefab asset**, so spawned potions are correct:
+
+```csharp
+var profile = AssetDatabase.LoadAssetAtPath<PotionVFXProfile>("Assets/VFX/Profiles/VFX_Curse.asset");
+var path    = "Assets/Prefabs/Potion_Curse.prefab";
+var root    = PrefabUtility.LoadPrefabContents(path);      // edit the ASSET, not an instance
+root.GetComponent<PotionAura>().ApplyProfile(profile);
+PrefabUtility.SaveAsPrefabAsset(root, path);
+PrefabUtility.UnloadPrefabContents(root);
+```
+
+3. **Then check the scene instance for a `potionColour` override.** If it has one it
+   will win over the prefab and silently keep the old colour. Either clear the
+   override, or call `ApplyProfile` on the instance too and re-save the scene.
+4. **Verify visually.** `manage_camera` with `view_position [-0.36, 0.115, 0.115]` and
+   `view_target [-0.36, 0.072, 0.003]` frames the whole rack head-on — that exact
+   shot is how the last recolour was checked.
+
+⚠️ Step 2 is the **recommended** flow but was **not exercised** in the 12 Aug session.
+That session edited the scene instances *first* and created the prefab variants
+*afterwards*, so the colours got baked in as a side effect. Expect to debug the
+`LoadPrefabContents` path a little; the API itself is correct.
+
+#### Palette advice for whatever you pick
+
+Two collisions are already known and are the obvious things to fix:
+
+- **Dispel `#F0F5FF` vs Reflection `#D9E3FF`** — both near-white and genuinely
+  indistinguishable as thin outlines at rack distance. This is the worst one.
+- **The blue-violet region is now crowded**: Foresight `#29D1FF` cyan, Warp `#4D73FF`
+  indigo, Curse `#66088C` purple. Curse survives on being much darker, but do not add
+  a fourth colour in that arc.
+
+Free-ish regions if you need somewhere to move a card: **deep green**, **amber/brown**,
+and **warm grey**. Remember §3 — nine distinct hues is over-subscribed, so separate by
+**value** (light vs dark) rather than hue wherever you can. That is what makes
+Curse/Warp work and what survives colourblindness and greyscale.
+
+Also keep §7's HDR rule: dominant channel between **1.0 and 1.6**, never push all
+three past 1.0 or the colour renders as white.
+
+### ⭐ Priority 2 — Decide what happens to the SECOND tube rack
 
 ⚠️ **This corrects the old Priority 2 audit note, which was wrong.** The nine
 `* Variant` prefabs are *not* orphaned assets left over from a pre-outline tube.
@@ -404,6 +502,14 @@ it wipes the other's properties every frame. Both currently do it correctly.
 freshly instantiated potion shows its outline colour only once `PotionAura` runs
 `Awake`/`OnValidate`. Do not expect to see the colour in the Project window preview.
 
+**Colour now lives in three places, and a scene override beats the prefab.**
+Since the tubes became prefab variants, `PotionAura.potionColour` is serialized into
+`Assets/Prefabs/Potion_<Type>.prefab` *and* can be overridden on the scene instance,
+on top of the `primary` in the profile asset. Change one and the others go stale —
+the classic symptom is "I edited it and the rack still looks the same" (scene override
+winning) or "the rack is right but spawned potions are wrong" (prefab left stale).
+Full procedure in §6 Priority 1.
+
 **Never use `.material` or `.sharedMaterial` for per-potion values.**
 `.material` clones per object (breaks batching, leaks in editor); `.sharedMaterial`
 edits the asset on disk (the git-churn bug above).
@@ -440,6 +546,10 @@ Alpha only (unlit)** — no emission port.
 
 - **`Main Camera` in `YeKai.unity` has a missing script reference.** Needs the owner
   to decide.
+- **`Potion_Hex.prefab` has a stale root-name override**, `testtube_potionShape 1
+  Variant` instead of `Potion_Hex`. Purely cosmetic — the scene instance overrides it
+  to `Potion_Hex`, and the other eight prefabs are correct. Fix by renaming the prefab
+  asset's root in the editor if it bothers you.
 - Unity Account API throws `HTTP/1.1 403 Forbidden` and a Vivox warning on startup —
   licensing/sign-in noise, unrelated to gameplay. **This is the only console output
   during normal operation; treat anything else as new.**
@@ -480,15 +590,23 @@ touch the editor.
 > I'm continuing VFX work on a Unity 6 URP VR card game. Read `VFX_HANDOFF.md` in the
 > project root for full context, then confirm the Unity MCP bridge is connected.
 >
-> The Curse/Warp recolour and the `Potion_<Ability>` rename + prefab variants are
-> both **done** — see §6. The open items are:
+> I'm continuing VFX work on a Unity 6 URP VR card game. Read `VFX_HANDOFF.md` in the
+> project root for full context, then confirm the Unity MCP bridge is connected before
+> doing anything in the editor.
 >
-> 1. **Decide what happens to the second tube rack** — §6 Priority 1. Six live
->    `* Variant` tubes sit at `x = -0.952` with no `PotionAura` and no outline, on a
->    different mesh lineage from the nine aura tubes. Delete / retrofit / leave.
->    **Ask before acting** — a teammate may own that rack.
-> 2. **Cast VFX per ability** — §6 Priority 3. `SpellMotion` is data only; nothing
->    consumes it yet.
+> **I want to change the potion tube colours again.**
+>
+> Before proposing values, read §6 Priority 1 — the recolour procedure changed once the
+> tubes became prefab variants, and colour now lives in three places that can go stale
+> independently. §5 has the current palette; §3 explains why motion matters more than
+> hue and why nine distinct colours is over-subscribed.
+>
+> Tell me which colours you'd change and why before applying anything. The known
+> problems are Dispel vs Reflection (near-identical whites) and a crowded blue-violet
+> arc (Foresight / Warp / Curse).
 >
 > Only touch `YeKai.unity`, `Assets/VFX/`, and the potion/pot prefabs — teammates own
-> the other scenes.
+> the other scenes. Current branch is `YK9`, off the merged `main`.
+
+**Also open, lower priority:** the second tube rack decision (§6 Priority 2) and cast
+VFX per ability (§6 Priority 3, `SpellMotion` is still data-only).

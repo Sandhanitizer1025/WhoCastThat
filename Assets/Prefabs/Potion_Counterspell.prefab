@@ -223,7 +223,7 @@ ParticleSystem:
       serializedVersion: 2
       minMaxState: 0
       minColor: {r: 1, g: 1, b: 1, a: 1}
-      maxColor: {r: 1.3, g: 1.0919999, b: 0.52, a: 1}
+      maxColor: {r: 0.65970314, g: 1.4626663, b: 1.498039, a: 1}
       maxGradient:
         serializedVersion: 2
         key0: {r: 1, g: 1, b: 1, a: 1}
@@ -5044,7 +5044,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 65a0334dfc9fe5b47aa477d69640dab7, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  potionColour: {r: 1.3, g: 1.0919999, b: 0.52, a: 1}
+  potionColour: {r: 0.65970314, g: 1.4626663, b: 1.498039, a: 1}
   liquidRenderer: {fileID: 5996882094940497056}
   motes:
   - {fileID: 1851276855522192896}
@@ -5055,6 +5055,7 @@ MonoBehaviour:
   pulseSpeed: 1.8
   pulseDepth: 0.2
   baseLightIntensity: 0.85
+  liquidGlow: 0.35
   heldBoost: 1.7
   boostSmoothing: 6
 --- !u!23 &5996882094940497056 stripped

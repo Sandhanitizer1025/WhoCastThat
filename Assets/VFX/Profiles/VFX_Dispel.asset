@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: VFX_Dispel
   m_EditorClassIdentifier: 
   type: 2
-  primary: {r: 1.5040001, g: 1.536, b: 1.6, a: 1}
+  primary: {r: 0.557, g: 0.102, b: 0.102, a: 1}
   secondary: {r: 0, g: 0, b: 0, a: 1}
   motion: 2
   duration: 0.35

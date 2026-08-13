@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: VFX_Phase
   m_EditorClassIdentifier: 
   type: 5
-  primary: {r: 0.53900003, g: 1.1, b: 0.77, a: 1}
+  primary: {r: 0.122, g: 0.369, b: 0.2, a: 1}
   secondary: {r: 0, g: 0, b: 0, a: 1}
   motion: 5
   duration: 0.8

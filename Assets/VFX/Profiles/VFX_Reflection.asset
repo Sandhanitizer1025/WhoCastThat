@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: VFX_Reflection
   m_EditorClassIdentifier: 
   type: 6
-  primary: {r: 1.0200001, g: 1.0680001, b: 1.2, a: 1}
+  primary: {r: 0.184, g: 0.435, b: 0.788, a: 1}
   secondary: {r: 0, g: 0, b: 0, a: 1}
   motion: 6
   duration: 0.7
