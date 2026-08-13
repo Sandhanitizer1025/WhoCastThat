@@ -1,0 +1,53 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 2dec70b656964bf45a8f06025274cb50, type: 3}
+  m_Name: SpellVoiceLibrary
+  m_EditorClassIdentifier: 
+  castVoices:
+  - type: 0
+    clip: {fileID: 8300000, guid: 81c97e449cfc2a44081cc0cf5154918b, type: 3}
+  - type: 1
+    clip: {fileID: 8300000, guid: 9dc7d75ee8e5c804e884743c719ecaca, type: 3}
+  - type: 3
+    clip: {fileID: 8300000, guid: ffa62af5e14b05c4e82506d9dc974a80, type: 3}
+  - type: 4
+    clip: {fileID: 8300000, guid: 13f9362143c38f04cba9c6497045e9a4, type: 3}
+  - type: 5
+    clip: {fileID: 8300000, guid: 7300d447a82e8504598bb85fec670f02, type: 3}
+  curseVoice: {fileID: 8300000, guid: cea6b4f340a6a6244922d70b9dd6ec4b, type: 3}
+  curseVoiceVictimOnly: 1
+  counterspellVoice: {fileID: 8300000, guid: 985008178c6662c4ca452a4ab0fb48cb, type: 3}
+  dispelVoices:
+  - type: 0
+    clip: {fileID: 8300000, guid: b03b9b2821f8dc74ebb6cf399e44a2a9, type: 3}
+  - type: 1
+    clip: {fileID: 8300000, guid: 1ac3695fd409dd143aa1186a4bb2cac5, type: 3}
+  - type: 3
+    clip: {fileID: 8300000, guid: 39cdad0552ba23646ba8112c9603e063, type: 3}
+  - type: 4
+    clip: {fileID: 8300000, guid: 579b84dffafbddd43a038cbe1e0e3201, type: 3}
+  - type: 5
+    clip: {fileID: 8300000, guid: d3c98d61d382f1f4abb5a59adc87ec5b, type: 3}
+  - type: 6
+    clip: {fileID: 8300000, guid: e4f4eac6cc0981b48bc6feba9056d611, type: 3}
+  reflectionVoices:
+  - type: 0
+    clip: {fileID: 8300000, guid: 0afff98ed4eba0848b4743e25fa820c2, type: 3}
+  - type: 1
+    clip: {fileID: 8300000, guid: 80f606217efaf4449afb4d9bf7d44318, type: 3}
+  - type: 3
+    clip: {fileID: 8300000, guid: 61c84af746f841047ac889d8aceebf46, type: 3}
+  - type: 4
+    clip: {fileID: 8300000, guid: d9c652a583fd6eb499ae78b5f75ebc93, type: 3}
+  - type: 5
+    clip: {fileID: 8300000, guid: 68761bb025cb6c04b95babda57f3d574, type: 3}
+  voiceTrim: 1
