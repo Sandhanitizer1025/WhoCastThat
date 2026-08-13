@@ -83,7 +83,12 @@ namespace WhoCastThat.Visuals
             // Parented to the avatar's head, which XRINetworkPlayer drives from the head origin
             // every frame, so the hat tracks head movement without any code here.
             worn.transform.SetParent(player.head, false);
-            worn.transform.localRotation = Quaternion.identity;
+
+            // Set BEFORE the fit below, not after: both the width measurement and the base-seating
+            // measurement read world-space bounds, and the mesh carries a baked tilt, so rotating
+            // it afterwards would move the geometry out from under numbers taken in the old
+            // orientation and drop the brim through the skull.
+            worn.transform.localRotation = library.FitRotation;
 
             Sanitise(worn);
             FitSize(worn, library.WidthMetres);

@@ -42,6 +42,12 @@ namespace WhoCastThat.Visuals
         [Tooltip("Metres forward, to sit the brim over the face rather than centred on the neck.")]
         [SerializeField] private float forwardOffset = 0.01f;
 
+        [Tooltip("Degrees to yaw the hat about the head's up axis before seating it. The hat mesh " +
+                 "is authored facing AWAY from the head's forward -- its bounds centre sits 3.5mm " +
+                 "behind its own pivot -- so at 0 the brim hangs down the back of the neck. 180 " +
+                 "turns it to face the same way as the player.")]
+        [SerializeField] private float yawDegrees = 180f;
+
         [Tooltip("Target hat width in metres. Applied by MEASURING each prefab rather than as a " +
                  "shared multiplier -- the hat prefabs are not authored at a common scale.")]
         [SerializeField] private float widthMetres = 0.30f;
@@ -50,6 +56,14 @@ namespace WhoCastThat.Visuals
         public float HeightOffset => heightOffset;
         public float ForwardOffset => forwardOffset;
         public float WidthMetres => widthMetres;
+        public float YawDegrees => yawDegrees;
+
+        /// <summary>
+        /// The hat's rotation relative to the head it sits on. Used by both the worn hat and the
+        /// lobby preview, so the two cannot drift apart — the preview's whole purpose is to show
+        /// what the player actually gets.
+        /// </summary>
+        public Quaternion FitRotation => Quaternion.Euler(0f, yawDegrees, 0f);
 
         /// <summary>
         /// The hat whose colour sits closest to <paramref name="colour"/>, or null if none are
