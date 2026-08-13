@@ -82,6 +82,8 @@ and every dynamic object (players, hats, potions) goes flat and dark. The light 
 | `Assets/Scripts/XRUIInputModuleGuard.cs` | New. Fixes XR UI input in every scene. |
 | `Assets/Scripts/GameAudioSettings.cs` | New. Audio prefs shared with `BootAudioManager`. |
 | `Assets/Scripts/InteractionTest/NetworkedSpellGame.cs` | **SHARED FILE** — only the `allowSoloPlay` flag + guard. Tell Raphael and Ye Kai. |
+| `Assets/Scripts/Audio/GameAudioDirector.cs` | **SHARED FILE (Raphael's)** — only the `sceneUnloaded` hook that stops music at the scene boundary. Tell him. |
+| `Assets/Scripts/ControllerTooltipSuppressor.cs` | New. Turns off the XR template's controller tooltips without editing VRMPAssets. |
 | `Assets/Scripts/PotDrawZone.cs` | Added a null guard. Orphaned prototype code otherwise — see §5. |
 
 **Scenes:** `TutorialScene.unity` is **Zelda's, confirmed**. `LobbyMirrorScene.unity` is Raphael's

@@ -51,6 +51,12 @@ namespace WhoCastThat.Audio
         // player who just left a match -- only the first gets the transition sting.
         private string previousScene;
 
+        // The track cut short by a scene change, and where it had got to. Remembered ONLY so that
+        // re-entering a scene that uses the same track can pick it up rather than snapping back to
+        // bar one -- the behaviour the fade below was written to protect.
+        private AudioClip stoppedClip;
+        private float stoppedTime;
+
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void Install()
         {
@@ -89,6 +95,7 @@ namespace WhoCastThat.Audio
             sfx.spatialBlend = 0f;
 
             SceneManager.sceneLoaded += OnSceneLoaded;
+            SceneManager.sceneUnloaded += OnSceneUnloaded;
 
             NetworkedSpellGame.SpellCastStarted += OnSpellCastStarted;
             NetworkedSpellGame.PlayerCursed += OnPlayerCursed;
@@ -99,6 +106,7 @@ namespace WhoCastThat.Audio
         private void OnDestroy()
         {
             SceneManager.sceneLoaded -= OnSceneLoaded;
+            SceneManager.sceneUnloaded -= OnSceneUnloaded;
 
             NetworkedSpellGame.SpellCastStarted -= OnSpellCastStarted;
             NetworkedSpellGame.PlayerCursed -= OnPlayerCursed;
@@ -134,6 +142,43 @@ namespace WhoCastThat.Audio
             }
 
             ApplyScene(scene.name);
+        }
+
+        /// <summary>
+        /// Cuts the outgoing scene's music at the scene boundary.
+        ///
+        /// Without this the old track outlives the scene it belongs to. This object is
+        /// DontDestroyOnLoad, so its fade coroutine is not bound to the scene at all: sceneUnloaded
+        /// fires, the new scene loads, and only THEN does OnSceneLoaded start a fade-out that takes
+        /// another <see cref="FadeSeconds"/> to finish. The lobby's music is therefore still audible
+        /// well into the tutorial, over the top of the tutorial's own opening narration.
+        ///
+        /// sceneUnloaded is the right hook because it fires BEFORE the next scene appears, so the
+        /// old track stops with the scene that owned it rather than bleeding past it.
+        /// </summary>
+        private void OnSceneUnloaded(Scene scene)
+        {
+            if (music == null)
+            {
+                return;
+            }
+
+            // The fade owns the volume; leaving it running would have it write to a stopped source
+            // and then fade in a track this method has just decided should not be playing.
+            if (fadeRoutine != null)
+            {
+                StopCoroutine(fadeRoutine);
+                fadeRoutine = null;
+            }
+
+            if (music.isPlaying)
+            {
+                stoppedClip = music.clip;
+                stoppedTime = music.time;
+                music.Stop();
+            }
+
+            music.volume = 0f;
         }
 
         private void ApplyScene(string sceneName)
@@ -221,6 +266,18 @@ namespace WhoCastThat.Audio
             music.clip = clip;
             music.volume = 0f;
             music.Play();
+
+            // Re-entering a scene whose track was cut by the scene change picks it up where it
+            // stopped, rather than snapping back to bar one -- a hard cut is the tell that music is
+            // scene-owned, which is what this class exists to avoid. Set AFTER Play(): assigning
+            // time to a source that has not started is not reliable for compressed clips.
+            if (clip == stoppedClip && stoppedTime > 0f && stoppedTime < clip.length)
+            {
+                music.time = stoppedTime;
+            }
+
+            stoppedClip = null;
+            stoppedTime = 0f;
 
             float target = GameAudioSettings.Music * currentTrim;
             for (float t = 0f; t < FadeSeconds; t += Time.unscaledDeltaTime)
