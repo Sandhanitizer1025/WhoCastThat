@@ -23,5 +23,8 @@ MonoBehaviour:
     clip: {fileID: 8300000, guid: 388dd2b10b68ff24894f0c65454efa95, type: 3}
     trim: 0.85
   castSfx: {fileID: 8300000, guid: 685e6f061c2422c479e19fb0131abd92, type: 3}
+  spellStings:
+  - type: 3
+    clip: {fileID: 8300000, guid: 35ed52a3dc89f1b4bb5e5ada2b293e48, type: 3}
   cursedSfx: {fileID: 8300000, guid: c18b92b1e63037f45ac326c64bb56ede, type: 3}
   sceneTransitionSfx: {fileID: 8300000, guid: aa66cd584d075c64b9e3c1f7ed14de5a, type: 3}

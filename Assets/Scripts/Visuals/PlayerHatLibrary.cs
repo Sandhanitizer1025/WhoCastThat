@@ -22,6 +22,10 @@ namespace WhoCastThat.Visuals
         {
             public GameObject prefab;
 
+            [Tooltip("Shown on the lobby picker. Authored rather than derived from the prefab " +
+                     "name, which would put 'Yello' in front of the player.")]
+            public string label;
+
             [Tooltip("The player colour this hat represents. The nearest match wins, so these do " +
                      "not have to line up exactly with the template's swatches.")]
             public Color colour;

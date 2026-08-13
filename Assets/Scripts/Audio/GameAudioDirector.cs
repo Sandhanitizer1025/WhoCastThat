@@ -249,7 +249,10 @@ namespace WhoCastThat.Audio
         // cannot be used to time anything, and the cast sound belongs on the cast either way.
         private void OnSpellCastStarted(PotionType type, ulong casterId, float windowSeconds)
         {
-            PlaySting(library.CastSfx);
+            // Per-spell sound where one exists, generic cast otherwise. Heard by everyone: which
+            // spell was cast is already public — the HUD announces it by name — so this discloses
+            // nothing. What Foresight actually SHOWS the caster stays private.
+            PlaySting(library.CastSfxFor(type));
         }
 
         // Heard by everyone. Curse status already replicates to every client (cursedNetwork is

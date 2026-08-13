@@ -15,18 +15,23 @@ MonoBehaviour:
   hats:
   - prefab: {fileID: 3341251260059651753, guid: 3c30c5fa732bffd44a4d019d4dab5c82,
       type: 3}
+    label: Blue
     colour: {r: 0.2, g: 0.4, b: 0.95, a: 1}
   - prefab: {fileID: 5023649294625581811, guid: 638ca7fcf1d58e2419fa3e3417adc9d1,
       type: 3}
+    label: Green
     colour: {r: 0.25, g: 0.8, b: 0.35, a: 1}
   - prefab: {fileID: 5303918891746273424, guid: 1d2083000edca6043b516d0dda1ba517,
       type: 3}
+    label: Purple
     colour: {r: 0.6, g: 0.3, b: 0.9, a: 1}
   - prefab: {fileID: 3050219481902342451, guid: 1eee202e05d42094087795aab5c3ae34,
       type: 3}
+    label: Red
     colour: {r: 0.9, g: 0.25, b: 0.25, a: 1}
   - prefab: {fileID: 5205523636895580798, guid: 6e046b9832bc8254a856ddc94f35889f,
       type: 3}
+    label: Yellow
     colour: {r: 0.95, g: 0.85, b: 0.25, a: 1}
   heightOffset: 0.1
   forwardOffset: 0.01

@@ -35,9 +35,23 @@ namespace WhoCastThat.Audio
         [Header("Music")]
         [SerializeField] private SceneTrack[] sceneTracks = Array.Empty<SceneTrack>();
 
+        /// <summary>A sound belonging to one spell, played instead of the generic cast sting.</summary>
+        [Serializable]
+        public struct SpellSting
+        {
+            [Tooltip("Which spell. Matches PotionType by index.")]
+            public PotionType type;
+
+            public AudioClip clip;
+        }
+
         [Header("Stings")]
-        [Tooltip("A spell has been cast onto the table.")]
+        [Tooltip("A spell has been cast onto the table. Used for any spell without its own sound.")]
         [SerializeField] private AudioClip castSfx;
+
+        [Tooltip("Per-spell sounds. A spell listed here plays its own clip INSTEAD of castSfx, " +
+                 "so adding one never doubles up with the generic cast.")]
+        [SerializeField] private SpellSting[] spellStings = Array.Empty<SpellSting>();
 
         [Tooltip("A player has just been cursed.")]
         [SerializeField] private AudioClip cursedSfx;
@@ -46,6 +60,27 @@ namespace WhoCastThat.Audio
         [SerializeField] private AudioClip sceneTransitionSfx;
 
         public AudioClip CastSfx => castSfx;
+
+        /// <summary>
+        /// The sound for casting <paramref name="type"/> — its own if one is authored, otherwise
+        /// the generic cast sting. Never both: a spell with a bespoke sound should not also fire
+        /// the default underneath it.
+        /// </summary>
+        public AudioClip CastSfxFor(PotionType type)
+        {
+            if (spellStings != null)
+            {
+                for (int i = 0; i < spellStings.Length; i++)
+                {
+                    if (spellStings[i].type == type && spellStings[i].clip != null)
+                    {
+                        return spellStings[i].clip;
+                    }
+                }
+            }
+
+            return castSfx;
+        }
         public AudioClip CursedSfx => cursedSfx;
         public AudioClip SceneTransitionSfx => sceneTransitionSfx;
 
