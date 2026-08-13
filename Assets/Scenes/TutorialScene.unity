@@ -26,7 +26,7 @@ RenderSettings:
   m_AmbientIntensity: 1
   m_AmbientMode: 0
   m_SubtractiveShadowColor: {r: 0.42, g: 0.478, b: 0.627, a: 1}
-  m_SkyboxMaterial: {fileID: 10304, guid: 0000000000000000f000000000000000, type: 0}
+  m_SkyboxMaterial: {fileID: 2100000, guid: a47620c294b35a6448859db9317ea21c, type: 2}
   m_HaloStrength: 0.5
   m_FlareStrength: 1
   m_FlareFadeSpeed: 3
@@ -314,7 +314,7 @@ PrefabInstance:
     - target: {fileID: 2104892051091369126, guid: 77ac6b10722bcca4a8baf70e44d89e78,
         type: 3}
       propertyPath: m_SizeDelta.x
-      value: 0
+      value: 42.21
       objectReference: {fileID: 0}
     - target: {fileID: 2104892051091369126, guid: 77ac6b10722bcca4a8baf70e44d89e78,
         type: 3}
@@ -429,7 +429,7 @@ PrefabInstance:
     - target: {fileID: 4293411706219940244, guid: 77ac6b10722bcca4a8baf70e44d89e78,
         type: 3}
       propertyPath: m_SizeDelta.x
-      value: 0
+      value: 63.78
       objectReference: {fileID: 0}
     - target: {fileID: 4293411706219940244, guid: 77ac6b10722bcca4a8baf70e44d89e78,
         type: 3}
@@ -514,7 +514,7 @@ PrefabInstance:
     - target: {fileID: 5481505350310966840, guid: 77ac6b10722bcca4a8baf70e44d89e78,
         type: 3}
       propertyPath: m_SizeDelta.x
-      value: 0
+      value: 36.8
       objectReference: {fileID: 0}
     - target: {fileID: 5481505350310966840, guid: 77ac6b10722bcca4a8baf70e44d89e78,
         type: 3}
@@ -564,7 +564,7 @@ PrefabInstance:
     - target: {fileID: 7017205199212174714, guid: 77ac6b10722bcca4a8baf70e44d89e78,
         type: 3}
       propertyPath: m_SizeDelta.x
-      value: 0
+      value: 82.3
       objectReference: {fileID: 0}
     - target: {fileID: 7017205199212174714, guid: 77ac6b10722bcca4a8baf70e44d89e78,
         type: 3}
@@ -784,7 +784,7 @@ PrefabInstance:
     - target: {fileID: 7931734656219179021, guid: 77ac6b10722bcca4a8baf70e44d89e78,
         type: 3}
       propertyPath: m_SizeDelta.x
-      value: 0
+      value: 62.76
       objectReference: {fileID: 0}
     - target: {fileID: 7931734656219179021, guid: 77ac6b10722bcca4a8baf70e44d89e78,
         type: 3}
@@ -834,7 +834,7 @@ PrefabInstance:
     - target: {fileID: 8215425130334822731, guid: 77ac6b10722bcca4a8baf70e44d89e78,
         type: 3}
       propertyPath: m_SizeDelta.x
-      value: 0
+      value: 62.76
       objectReference: {fileID: 0}
     - target: {fileID: 8215425130334822731, guid: 77ac6b10722bcca4a8baf70e44d89e78,
         type: 3}
@@ -874,7 +874,7 @@ PrefabInstance:
     - target: {fileID: 8264524102105252258, guid: 77ac6b10722bcca4a8baf70e44d89e78,
         type: 3}
       propertyPath: m_SizeDelta.x
-      value: 0
+      value: 36.8
       objectReference: {fileID: 0}
     - target: {fileID: 8264524102105252258, guid: 77ac6b10722bcca4a8baf70e44d89e78,
         type: 3}
@@ -904,7 +904,7 @@ PrefabInstance:
     - target: {fileID: 8796977001930958068, guid: 77ac6b10722bcca4a8baf70e44d89e78,
         type: 3}
       propertyPath: m_SizeDelta.x
-      value: 0
+      value: 42.01
       objectReference: {fileID: 0}
     - target: {fileID: 8796977001930958068, guid: 77ac6b10722bcca4a8baf70e44d89e78,
         type: 3}
@@ -1746,7 +1746,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 3a6090ebcdfa12547b2dcbd6e2369698, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  tableCenter: {fileID: 0}
+  tableCenter: {fileID: 553912830}
   seats:
   - {fileID: 1167056330}
   - {fileID: 1680794447}
@@ -1807,6 +1807,7 @@ GameObject:
   m_Component:
   - component: {fileID: 836362494}
   - component: {fileID: 836362493}
+  - component: {fileID: 836362495}
   m_Layer: 0
   m_Name: TutorialDriver
   m_TagString: Untagged
@@ -1828,6 +1829,27 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   targetSeat: {fileID: 1775439682}
   seatArriveRadius: 0.9
+  hudDistance: 1.5
+  hudHeightOffset: 0.4
+  bannerOffsetY: 300
+  bookOffsetY: -380
+  bookForwardOffset: 450
+  voiceLines:
+  - {fileID: 8300000, guid: d5d76db35f736e64ab1da583f32a59ba, type: 3}
+  - {fileID: 8300000, guid: 80f4da575bd3c234095e757d80280198, type: 3}
+  - {fileID: 8300000, guid: 48cea72631adc4f41b56aada51630d61, type: 3}
+  - {fileID: 8300000, guid: fa79719ea4a8a11419ae715591f0a3a1, type: 3}
+  - {fileID: 8300000, guid: 96401d1ed95510941bfb95340ab8f7ca, type: 3}
+  - {fileID: 8300000, guid: 6bbc63e1ae5f4c34fbcd17d615473db0, type: 3}
+  - {fileID: 8300000, guid: 591b264eb80250e43aab03bae126f740, type: 3}
+  - {fileID: 8300000, guid: 128fd5c9195ce0e44a45dfc85f8c98d8, type: 3}
+  - {fileID: 8300000, guid: 41813bc234cff7f49afb0b20516595ef, type: 3}
+  - {fileID: 8300000, guid: efacaadb18a8be740ba43371fd5734e5, type: 3}
+  - {fileID: 8300000, guid: f9f619f009e3a284e9925696f3f38ebd, type: 3}
+  - {fileID: 0}
+  voiceVolume: 1
+  uiFont: {fileID: 11400000, guid: 7978071498c14c242b2dadd35b9407d5, type: 2}
+  cauldronReachPadding: 0.12
   bookBackground: {fileID: 21300000, guid: eb7e4f5970a4a324aa7c4165b2cf71b0, type: 3}
 --- !u!4 &836362494
 Transform:
@@ -1844,6 +1866,19 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &836362495
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 836362492}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 83cc5430a9ccb0e48a3834f327414519, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  port: 7777
 --- !u!1 &950317573
 GameObject:
   m_ObjectHideFlags: 0
@@ -1916,6 +1951,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   ShowTopMostFoldoutHeaderGroup: 1
   minPlayersToStart: 1
+  allowSoloPlay: 1
   networkedPotionPrefab: {fileID: 592917901370543573, guid: 09a56195bd3368046acc24a3002c6653,
     type: 3}
   seatRacks:
@@ -2219,7 +2255,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 3379ab23c32ac914294e045af4b24737, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  autoConnectOnStart: 1
+  autoConnectOnStart: 0
   autoConnectDelay: 1.5
 --- !u!4 &1100086884
 Transform:

@@ -112,6 +112,11 @@ public class MagicMirrorMenu : MonoBehaviour
     // =======================================================================
     //  EDITOR BUILDER  -  constructs the mirror menu UI and wires references.
     // =======================================================================
+    // Font used for every label BuildMenu creates. Loaded once per build so the mirror matches
+    // the tutorial; falls back to TMP's default if the asset is missing.
+    const string MenuFontPath = "Assets/Fonts/Gabriola SDF.asset";
+    static TMP_FontAsset s_MenuFont;
+
     static readonly Color PanelBg   = new Color(0.05f, 0.02f, 0.12f, 0.88f);
     static readonly Color Accent     = new Color(0.72f, 0.45f, 1f, 1f);
     static readonly Color BtnNormal  = new Color(0.24f, 0.11f, 0.44f, 0.92f);
@@ -122,6 +127,10 @@ public class MagicMirrorMenu : MonoBehaviour
     [MenuItem("WhoCastThat/Build Mirror Menu")]
     public static void BuildMenu()
     {
+        s_MenuFont = AssetDatabase.LoadAssetAtPath<TMP_FontAsset>(MenuFontPath);
+        if (s_MenuFont == null)
+            Debug.LogWarning("[MirrorMenu] " + MenuFontPath + " not found; using TMP's default font.");
+
         var mirror = GameObject.Find("magik mirror");
         if (mirror == null) { Debug.LogError("[MirrorMenu] 'magik mirror' not found."); return; }
         var mr = mirror.GetComponent<MeshRenderer>();
@@ -236,6 +245,7 @@ public class MagicMirrorMenu : MonoBehaviour
         var rt = go.GetComponent<RectTransform>();
         rt.anchoredPosition = pos; rt.sizeDelta = sizeD;
         var tmp = go.AddComponent<TextMeshProUGUI>();
+        if (s_MenuFont != null) tmp.font = s_MenuFont;   // every menu label goes through here
         tmp.text = text; tmp.fontSize = size; tmp.color = color; tmp.fontStyle = style;
         tmp.alignment = TextAlignmentOptions.Center;
         tmp.textWrappingMode = TextWrappingModes.Normal;
