@@ -239,19 +239,15 @@ namespace WhoCastThat.Audio
 
         private IEnumerator FadeTo(AudioClip clip, float trim)
         {
-            float startVolume = music.volume;
-
-            // Unscaled throughout: a fade is chrome, and must not stall if anything ever touches
-            // Time.timeScale.
-            if (music.isPlaying && startVolume > 0f)
-            {
-                for (float t = 0f; t < FadeSeconds; t += Time.unscaledDeltaTime)
-                {
-                    music.volume = Mathf.Lerp(startVolume, 0f, t / FadeSeconds);
-                    yield return null;
-                }
-            }
-
+            // NO FADE-OUT. This runs from ApplyScene, which is only ever reached from Awake or a
+            // scene load, so anything still playing here belongs to a scene the player has already
+            // left. Fading it took FadeSeconds of the NEW scene, which is what "the lobby music
+            // carries on into the tutorial" actually was.
+            //
+            // OnSceneUnloaded normally stops it a moment earlier, before the new scene even
+            // appears. This is the backstop for any path where that does not fire -- the two
+            // together mean no route into a scene can bring the previous scene's music with it.
+            // The fade-IN below is kept: arriving music rising from silence is not a bleed.
             music.Stop();
             currentTrim = trim;
 
