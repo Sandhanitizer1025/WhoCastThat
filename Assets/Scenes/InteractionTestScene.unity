@@ -456,74 +456,6 @@ Transform:
   - {fileID: 638358771}
   m_Father: {fileID: 1137715352}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!1001 &13054682
-PrefabInstance:
-  m_ObjectHideFlags: 0
-  serializedVersion: 2
-  m_Modification:
-    serializedVersion: 3
-    m_TransformParent: {fileID: 0}
-    m_Modifications:
-    - target: {fileID: 1147271793847219947, guid: 9e5337484c1cc4c499287c17ce37d511,
-        type: 3}
-      propertyPath: m_Name
-      value: Potion_Hex
-      objectReference: {fileID: 0}
-    - target: {fileID: 7134347894716784992, guid: 9e5337484c1cc4c499287c17ce37d511,
-        type: 3}
-      propertyPath: m_LocalPosition.x
-      value: -1.7586346
-      objectReference: {fileID: 0}
-    - target: {fileID: 7134347894716784992, guid: 9e5337484c1cc4c499287c17ce37d511,
-        type: 3}
-      propertyPath: m_LocalPosition.y
-      value: -0.0044391155
-      objectReference: {fileID: 0}
-    - target: {fileID: 7134347894716784992, guid: 9e5337484c1cc4c499287c17ce37d511,
-        type: 3}
-      propertyPath: m_LocalPosition.z
-      value: -21.478874
-      objectReference: {fileID: 0}
-    - target: {fileID: 7134347894716784992, guid: 9e5337484c1cc4c499287c17ce37d511,
-        type: 3}
-      propertyPath: m_LocalRotation.w
-      value: -1
-      objectReference: {fileID: 0}
-    - target: {fileID: 7134347894716784992, guid: 9e5337484c1cc4c499287c17ce37d511,
-        type: 3}
-      propertyPath: m_LocalRotation.x
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 7134347894716784992, guid: 9e5337484c1cc4c499287c17ce37d511,
-        type: 3}
-      propertyPath: m_LocalRotation.y
-      value: -0
-      objectReference: {fileID: 0}
-    - target: {fileID: 7134347894716784992, guid: 9e5337484c1cc4c499287c17ce37d511,
-        type: 3}
-      propertyPath: m_LocalRotation.z
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 7134347894716784992, guid: 9e5337484c1cc4c499287c17ce37d511,
-        type: 3}
-      propertyPath: m_LocalEulerAnglesHint.x
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 7134347894716784992, guid: 9e5337484c1cc4c499287c17ce37d511,
-        type: 3}
-      propertyPath: m_LocalEulerAnglesHint.y
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 7134347894716784992, guid: 9e5337484c1cc4c499287c17ce37d511,
-        type: 3}
-      propertyPath: m_LocalEulerAnglesHint.z
-      value: 360
-      objectReference: {fileID: 0}
-    m_RemovedComponents: []
-    m_RemovedGameObjects: []
-    m_AddedGameObjects: []
-    m_AddedComponents: []
-  m_SourcePrefab: {fileID: 100100000, guid: 9e5337484c1cc4c499287c17ce37d511, type: 3}
 --- !u!1 &14180673
 GameObject:
   m_ObjectHideFlags: 0
@@ -3544,74 +3476,6 @@ MeshFilter:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 220715906}
   m_Mesh: {fileID: 925618781294995576, guid: 44ed82cf4b0e6854588c54ac03d898ab, type: 3}
---- !u!1001 &225913521
-PrefabInstance:
-  m_ObjectHideFlags: 0
-  serializedVersion: 2
-  m_Modification:
-    serializedVersion: 3
-    m_TransformParent: {fileID: 0}
-    m_Modifications:
-    - target: {fileID: -8679921383154817045, guid: d4a7f083076667241abb91fc23ae2083,
-        type: 3}
-      propertyPath: m_LocalPosition.x
-      value: -4.6
-      objectReference: {fileID: 0}
-    - target: {fileID: -8679921383154817045, guid: d4a7f083076667241abb91fc23ae2083,
-        type: 3}
-      propertyPath: m_LocalPosition.y
-      value: -1.3234231
-      objectReference: {fileID: 0}
-    - target: {fileID: -8679921383154817045, guid: d4a7f083076667241abb91fc23ae2083,
-        type: 3}
-      propertyPath: m_LocalPosition.z
-      value: -11
-      objectReference: {fileID: 0}
-    - target: {fileID: -8679921383154817045, guid: d4a7f083076667241abb91fc23ae2083,
-        type: 3}
-      propertyPath: m_LocalRotation.w
-      value: 0.7313193
-      objectReference: {fileID: 0}
-    - target: {fileID: -8679921383154817045, guid: d4a7f083076667241abb91fc23ae2083,
-        type: 3}
-      propertyPath: m_LocalRotation.x
-      value: -0
-      objectReference: {fileID: 0}
-    - target: {fileID: -8679921383154817045, guid: d4a7f083076667241abb91fc23ae2083,
-        type: 3}
-      propertyPath: m_LocalRotation.y
-      value: 0.68203527
-      objectReference: {fileID: 0}
-    - target: {fileID: -8679921383154817045, guid: d4a7f083076667241abb91fc23ae2083,
-        type: 3}
-      propertyPath: m_LocalRotation.z
-      value: -0
-      objectReference: {fileID: 0}
-    - target: {fileID: -8679921383154817045, guid: d4a7f083076667241abb91fc23ae2083,
-        type: 3}
-      propertyPath: m_LocalEulerAnglesHint.x
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: -8679921383154817045, guid: d4a7f083076667241abb91fc23ae2083,
-        type: 3}
-      propertyPath: m_LocalEulerAnglesHint.y
-      value: 86.006
-      objectReference: {fileID: 0}
-    - target: {fileID: -8679921383154817045, guid: d4a7f083076667241abb91fc23ae2083,
-        type: 3}
-      propertyPath: m_LocalEulerAnglesHint.z
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 919132149155446097, guid: d4a7f083076667241abb91fc23ae2083,
-        type: 3}
-      propertyPath: m_Name
-      value: UE4guy_UE4guy_geo
-      objectReference: {fileID: 0}
-    m_RemovedComponents: []
-    m_RemovedGameObjects: []
-    m_AddedGameObjects: []
-    m_AddedComponents: []
-  m_SourcePrefab: {fileID: 100100000, guid: d4a7f083076667241abb91fc23ae2083, type: 3}
 --- !u!1 &232081857
 GameObject:
   m_ObjectHideFlags: 0
@@ -14309,9 +14173,9 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 776955111}
   serializedVersion: 2
-  m_LocalRotation: {x: 0.7071068, y: 0, z: 0, w: 0.7071068}
-  m_LocalPosition: {x: -0.00038, y: -0.00341, z: 0.00106}
-  m_LocalScale: {x: -0.033864122, y: -0.021264965, z: -0.01802896}
+  m_LocalRotation: {x: -0.27059808, y: 0.6532815, z: 0.6532815, w: 0.27059808}
+  m_LocalPosition: {x: -0.00026251544, y: -0.0005082681, z: 0.00065891456}
+  m_LocalScale: {x: 0.02344866, y: 0.020330718, z: 0.020330718}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 1432450457}
@@ -14468,7 +14332,7 @@ ParticleSystem:
       m_RotationOrder: 4
   moveWithTransform: 0
   moveWithCustomTransform: {fileID: 0}
-  scalingMode: 1
+  scalingMode: 0
   randomSeed: 0
   InitialModule:
     serializedVersion: 3
@@ -14476,7 +14340,7 @@ ParticleSystem:
     startLifetime:
       serializedVersion: 2
       minMaxState: 0
-      scalar: 1.5
+      scalar: 2.2
       minScalar: 5
       maxCurve:
         serializedVersion: 2
@@ -14529,7 +14393,7 @@ ParticleSystem:
     startSpeed:
       serializedVersion: 2
       minMaxState: 0
-      scalar: 1
+      scalar: 0.3
       minScalar: 5
       maxCurve:
         serializedVersion: 2
@@ -14647,7 +14511,7 @@ ParticleSystem:
     startSize:
       serializedVersion: 2
       minMaxState: 0
-      scalar: 1.5
+      scalar: 0.42
       minScalar: 1
       maxCurve:
         serializedVersion: 2
@@ -14964,14 +14828,14 @@ ParticleSystem:
         m_RotationOrder: 4
     randomizeRotationDirection: 0
     gravitySource: 0
-    maxNumParticles: 1000
+    maxNumParticles: 200
     customEmitterVelocity: {x: 0, y: 0, z: 0}
     size3D: 0
     rotation3D: 0
     gravityModifier:
       serializedVersion: 2
       minMaxState: 0
-      scalar: 0
+      scalar: -0.12
       minScalar: 0
       maxCurve:
         serializedVersion: 2
@@ -15024,8 +14888,8 @@ ParticleSystem:
   ShapeModule:
     serializedVersion: 6
     enabled: 1
-    type: 5
-    angle: 0
+    type: 4
+    angle: 5
     length: 5
     boxThickness: {x: 0, y: 0, z: 0}
     radiusThickness: 1
@@ -15111,7 +14975,7 @@ ParticleSystem:
     sphericalDirectionAmount: 0
     randomPositionAmount: 0
     radius:
-      value: 1.2
+      value: 0.1
       mode: 0
       spread: 0
       speed:
@@ -15230,7 +15094,7 @@ ParticleSystem:
     rateOverTime:
       serializedVersion: 2
       minMaxState: 0
-      scalar: 10
+      scalar: 9
       minScalar: 10
       maxCurve:
         serializedVersion: 2
@@ -35491,9 +35355,9 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1719417741}
   serializedVersion: 2
-  m_LocalRotation: {x: 0.7071068, y: 0, z: 0, w: 0.7071068}
-  m_LocalPosition: {x: -0.00008, y: -0.00379, z: 0.00106}
-  m_LocalScale: {x: -0.023227153, y: -0.023227153, z: -0.023227153}
+  m_LocalRotation: {x: -0.27059808, y: 0.6532815, z: 0.6532815, w: 0.27059808}
+  m_LocalPosition: {x: -0.00026251544, y: -0.0035578755, z: 0.00065891456}
+  m_LocalScale: {x: 0.02344866, y: 0.020330718, z: 0.020330718}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 1432450457}
@@ -35650,7 +35514,7 @@ ParticleSystem:
       m_RotationOrder: 4
   moveWithTransform: 0
   moveWithCustomTransform: {fileID: 0}
-  scalingMode: 1
+  scalingMode: 0
   randomSeed: 0
   InitialModule:
     serializedVersion: 3
@@ -35658,7 +35522,7 @@ ParticleSystem:
     startLifetime:
       serializedVersion: 2
       minMaxState: 0
-      scalar: 1.5
+      scalar: 1.1
       minScalar: 5
       maxCurve:
         serializedVersion: 2
@@ -35711,7 +35575,7 @@ ParticleSystem:
     startSpeed:
       serializedVersion: 2
       minMaxState: 0
-      scalar: 1
+      scalar: 0.45
       minScalar: 5
       maxCurve:
         serializedVersion: 2
@@ -35829,7 +35693,7 @@ ParticleSystem:
     startSize:
       serializedVersion: 2
       minMaxState: 0
-      scalar: 1.5
+      scalar: 0.3
       minScalar: 1
       maxCurve:
         serializedVersion: 2
@@ -36146,14 +36010,14 @@ ParticleSystem:
         m_RotationOrder: 4
     randomizeRotationDirection: 0
     gravitySource: 0
-    maxNumParticles: 1000
+    maxNumParticles: 200
     customEmitterVelocity: {x: 0, y: 0, z: 0}
     size3D: 0
     rotation3D: 0
     gravityModifier:
       serializedVersion: 2
       minMaxState: 0
-      scalar: 0
+      scalar: -0.05
       minScalar: 0
       maxCurve:
         serializedVersion: 2
@@ -36207,7 +36071,7 @@ ParticleSystem:
     serializedVersion: 6
     enabled: 1
     type: 4
-    angle: 0
+    angle: 8
     length: 5
     boxThickness: {x: 0, y: 0, z: 0}
     radiusThickness: 1
@@ -36293,7 +36157,7 @@ ParticleSystem:
     sphericalDirectionAmount: 0
     randomPositionAmount: 0
     radius:
-      value: 0.75
+      value: 0.16
       mode: 0
       spread: 0
       speed:
@@ -36412,7 +36276,7 @@ ParticleSystem:
     rateOverTime:
       serializedVersion: 2
       minMaxState: 0
-      scalar: 10
+      scalar: 26
       minScalar: 10
       maxCurve:
         serializedVersion: 2
@@ -50293,7 +50157,5 @@ SceneRoots:
   - {fileID: 390843205}
   - {fileID: 1388743915}
   - {fileID: 1321912163}
-  - {fileID: 225913521}
   - {fileID: 1256095825}
   - {fileID: 605992011}
-  - {fileID: 13054682}
