@@ -52,6 +52,11 @@ namespace WhoCastThat.Visuals
 
             nextScan = Time.unscaledTime + ScanIntervalSeconds;
 
+            // Re-assert the saved hat on the same tick. The network manager sets the local colour
+            // from its own default when it initialises, which happens AFTER the lobby chose one,
+            // so applying the preference once at load is not enough to carry it into a match.
+            HatPreference.Reapply();
+
             XRINetworkPlayer[] players =
                 FindObjectsByType<XRINetworkPlayer>(FindObjectsSortMode.None);
 

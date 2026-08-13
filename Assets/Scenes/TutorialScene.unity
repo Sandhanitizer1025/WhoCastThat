@@ -1835,17 +1835,17 @@ MonoBehaviour:
   bookOffsetY: -380
   bookForwardOffset: 450
   voiceLines:
-  - {fileID: 8300000, guid: d5d76db35f736e64ab1da583f32a59ba, type: 3}
-  - {fileID: 8300000, guid: 80f4da575bd3c234095e757d80280198, type: 3}
-  - {fileID: 8300000, guid: 48cea72631adc4f41b56aada51630d61, type: 3}
-  - {fileID: 8300000, guid: fa79719ea4a8a11419ae715591f0a3a1, type: 3}
-  - {fileID: 8300000, guid: 96401d1ed95510941bfb95340ab8f7ca, type: 3}
-  - {fileID: 8300000, guid: 6bbc63e1ae5f4c34fbcd17d615473db0, type: 3}
-  - {fileID: 8300000, guid: 591b264eb80250e43aab03bae126f740, type: 3}
-  - {fileID: 8300000, guid: 128fd5c9195ce0e44a45dfc85f8c98d8, type: 3}
-  - {fileID: 8300000, guid: 41813bc234cff7f49afb0b20516595ef, type: 3}
-  - {fileID: 8300000, guid: efacaadb18a8be740ba43371fd5734e5, type: 3}
-  - {fileID: 8300000, guid: f9f619f009e3a284e9925696f3f38ebd, type: 3}
+  - {fileID: 8300000, guid: 07385c1506258084382bbd4a1511481e, type: 3}
+  - {fileID: 8300000, guid: 286caddb63ed8084dbac2b57b7d3255c, type: 3}
+  - {fileID: 8300000, guid: b942f13f02b5ab349b73450f3688d088, type: 3}
+  - {fileID: 8300000, guid: e755225f52c9bdd4a90f149165110dca, type: 3}
+  - {fileID: 8300000, guid: d059fbe2a9c03eb4a8a17d655f4ed644, type: 3}
+  - {fileID: 8300000, guid: 5cd46af54e896134bab5e00626094629, type: 3}
+  - {fileID: 8300000, guid: d9e8afbb0f1f86b43954fc45decca291, type: 3}
+  - {fileID: 8300000, guid: 35888ac19f241a54fb9784aec0b160b8, type: 3}
+  - {fileID: 8300000, guid: 7eec626686fee0c488f135c08f4257d7, type: 3}
+  - {fileID: 8300000, guid: d9b303711b6f2a44083550d9f850eab7, type: 3}
+  - {fileID: 8300000, guid: 8a54a98a8f7832b4cae9fcaf4aa29f0f, type: 3}
   - {fileID: 0}
   voiceVolume: 1
   uiFont: {fileID: 11400000, guid: 7978071498c14c242b2dadd35b9407d5, type: 2}
@@ -2585,6 +2585,11 @@ PrefabInstance:
     serializedVersion: 3
     m_TransformParent: {fileID: 2001138686}
     m_Modifications:
+    - target: {fileID: 3730266003587620556, guid: 381d6312b74b31344b392a6174528d11,
+        type: 3}
+      propertyPath: m_Intensity
+      value: 0.45
+      objectReference: {fileID: 0}
     - target: {fileID: 4768653190300152477, guid: 381d6312b74b31344b392a6174528d11,
         type: 3}
       propertyPath: m_LocalScale.x
