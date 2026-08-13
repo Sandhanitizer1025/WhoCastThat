@@ -42,6 +42,12 @@ namespace WhoCastThat.Interactions
         [Tooltip("Players required before the match starts (and below which it ends).")]
         [SerializeField] private int minPlayersToStart = 2;
 
+        [Tooltip("Let a lone player keep playing instead of instantly being declared the winner. " +
+                 "The match is 'last mage standing', so with one player the win check fires the " +
+                 "moment the game starts and switches gameActive off — which silently rejects " +
+                 "every cast and draw. Needed by the TUTORIAL only; leave OFF for real matches.")]
+        [SerializeField] private bool allowSoloPlay = false;
+
         [Header("Networked potions")]
         [Tooltip("Potion prefab (NetworkObject + NetworkedPotion). Must be registered with the Network Manager.")]
         [SerializeField] private GameObject networkedPotionPrefab;
@@ -2444,6 +2450,13 @@ namespace WhoCastThat.Interactions
         private bool CheckForWinner()
         {
             if (ActivePlayerCount() > 1)
+            {
+                return false;
+            }
+
+            // Solo tutorial: one player left is the normal state, not a victory. Zero still ends
+            // the match, so drawing a Curse with no Counterspell finishes the tutorial properly.
+            if (allowSoloPlay && ActivePlayerCount() >= 1)
             {
                 return false;
             }

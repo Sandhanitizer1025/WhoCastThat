@@ -3,6 +3,7 @@ using System.Collections;
 using UnityEngine;
 using UnityEngine.UI;
 using UnityEngine.InputSystem;
+using UnityEngine.XR.Interaction.Toolkit.UI; // TrackedDeviceGraphicRaycaster
 using Unity.XR.CoreUtils; // XROrigin
 using TMPro;
 using WhoCastThat.Interactions; // NetworkedSpellGame, NetworkedPotion, SeatLock, PlayerSeater
@@ -13,7 +14,7 @@ namespace WhoCastThat.Tutorial
     /// Single-player guided tutorial for "Who Cast That?", layered on top of the real
     /// (networked) gameplay in a copy of InteractionTestScene running as a solo host.
     ///
-    /// It drives a 7-step flow with a screen-space HUD:
+    /// It drives a 7-step flow with a world-space HUD that follows the player's head:
     ///   1. Show the VR controls.
     ///   2. Point the player to their seat with a floating marker (walk there).
     ///   3. Seat + lock them (look-only) via the existing SeatLock.
@@ -34,6 +35,50 @@ namespace WhoCastThat.Tutorial
         [Tooltip("How close the headset must get to the seat (metres, horizontal) to count as 'arrived'.")]
         [SerializeField] private float seatArriveRadius = 0.9f;
 
+        [Header("HUD placement (world space)")]
+        [Tooltip("Metres in front of the player the tutorial HUD sits.")]
+        [SerializeField] private float hudDistance = 1.5f;
+
+        [Tooltip("Metres above (+) or below (-) eye height the HUD centres on.")]
+        [SerializeField] private float hudHeightOffset = 0.4f;
+
+        [Tooltip("Canvas units the step banner sits above the HUD centre (1000 units = 1 metre). " +
+                 "Positive lifts it above the eye line, which keeps it clear of the table once " +
+                 "the player is seated and looking down at the ring.")]
+        [SerializeField] private float bannerOffsetY = 300f;
+
+        [Tooltip("Canvas units the Guide Book sits above the HUD centre (1000 units = 1 metre). " +
+                 "Negative drops it below the step banner, which is where it belongs now the HUD " +
+                 "itself sits above the eye line.")]
+        [SerializeField] private float bookOffsetY = -380f;
+
+        [Tooltip("Canvas units the Guide Book sits IN FRONT of the rest of the HUD, toward the " +
+                 "player (1000 units = 1 metre). The book is for reading, so it wants to be " +
+                 "closer than the step banner rather than sharing its plane.")]
+        [SerializeField] private float bookForwardOffset = 450f;
+
+        [Header("Voiceover")]
+        [Tooltip("Narration in playback order: element 0 plays when the first banner appears, and " +
+                 "every banner after that (each arrow press, each completed action) plays the next " +
+                 "one. Drop the recordings in numbered order. Unity cannot import .m4a — convert to " +
+                 "WAV or OGG first. Empty or missing entries simply stay silent.")]
+        [SerializeField] private AudioClip[] voiceLines = new AudioClip[0];
+
+        [Tooltip("Narration volume. Scaled again by the Master slider in the mirror settings.")]
+        [Range(0f, 1f)]
+        [SerializeField] private float voiceVolume = 1f;
+
+        [Header("Look")]
+        [Tooltip("Font for every label the tutorial builds — banner, guide book, buttons. Leave " +
+                 "empty to keep TMP's default. Give it a fallback font asset if it lacks arrows.")]
+        [SerializeField] private TMP_FontAsset uiFont;
+
+        [Header("Cauldron")]
+        [Tooltip("Extra metres of tolerance around the cauldron's trigger volume when testing " +
+                 "whether a controller is in the pot. The trigger is only ~0.4 m across and a " +
+                 "controller can cross it between two frames.")]
+        [SerializeField] private float cauldronReachPadding = 0.12f;
+
         [Header("Guide Book")]
         [Tooltip("Background image for the Guide Book — import the open-book PNG as a Sprite (2D and UI) and assign it here.")]
         public Sprite bookBackground;
@@ -47,7 +92,7 @@ namespace WhoCastThat.Tutorial
             { "Your VR toolkit", "Taking a turn", "Be the last mage", "What's in the cauldron", "Who Cast That?" };
         private static readonly string[] PageBody =
         {
-            "<b>Left Stick</b> — Move / walk\n\n<b>Right Stick</b> — Turn to look\n\n<b>Grip</b> — Grab a potion\n\n<b>Trigger</b> — Select · draw from the cauldron\n\n<b>Release</b> — Drop a held potion\n\n<b>E</b> — Open / close this book",
+            "<b>Left Stick</b> — Move / walk\n\n<b>Right Stick</b> — Turn to look\n\n<b>Grip</b> — Grab a potion\n\n<b>Trigger</b> — Select · confirm your draw at the cauldron\n\n<b>Release</b> — Drop a held potion\n\n<b>X</b> — Open / close this book",
             "On your turn:\n\n<b>1.</b> Cast potions — grab one and drop it in the glowing ring in the centre.\n\n<b>2.</b> End your turn by drawing — dip a hand in the cauldron and pull a potion.\n\nSome potions end your turn early or change who plays next.",
             "Be the <b>last wizard standing</b>.\n\nDraw a <b>Curse</b> with no <b>Counterspell</b> and you explode — you're out of the game.\n\nOutlast every rival and the victory is yours!",
             "<b>Hex</b> ×5 — next player takes 2 turns\n<b>Tribute</b> ×4 — take a card from someone\n<b>Dispel</b> ×4 — cancel an action\n<b>Foresight</b> ×5 — peek the top 3\n<b>Warp</b> ×4 — shuffle the deck\n<b>Phase</b> ×4 — end turn, no draw\n<b>Reflection</b> ×4 — copy the last card\n<b>Counterspell</b> ×6 — dodge a Curse\n<b>Curse</b> ×4 — you explode!",
@@ -58,7 +103,8 @@ namespace WhoCastThat.Tutorial
         private SeatLock seatLock;
         private PlayerSeater playerSeater;
 
-        // Screen-space UI
+        // World-space UI (VR: an overlay canvas is invisible in a headset)
+        private TutorialHudFollow hudFollow;
         private TMP_Text bannerText;
         private GameObject controlsPanel; // the Guide Book
         private GameObject finishPanel;
@@ -73,10 +119,14 @@ namespace WhoCastThat.Tutorial
         // Floating world marker over the seat.
         private GameObject seatMarker;
 
+        private Collider[] cauldronZones;
+        private Transform[] handPoints;
+        private AudioSource voiceSource;
+        private int voiceIndex;
         private bool advanceRequested;
         private bool guideEverOpened;
         private Camera headCam;
-        private InputAction guideToggle; // VR controller button (+ E) that opens/closes the book
+        private InputAction guideToggle; // X on the left controller; opens/closes the Guide Book
 
         private void Awake()
         {
@@ -100,14 +150,17 @@ namespace WhoCastThat.Tutorial
         {
             NetworkedSpellGame.AnnouncementChanged += OnAnnouncement;
 
-            // Open/close the Guide Book with a VR controller face button (A / X on either hand),
-            // the controller menu button, or E on the keyboard for desktop testing.
+            // Open/close the Guide Book with X (left face button), A (right face button), the
+            // menu button on either hand, or the X key on the keyboard for desktop testing.
+            //
+            // Grip is deliberately NOT bound: grip is also the grab button, so squeezing it to
+            // pick up a potion in step 5 threw the book open over the player's view.
             guideToggle = new InputAction("GuideToggle", InputActionType.Button);
-            guideToggle.AddBinding("<XRController>{LeftHand}/primaryButton");
-            guideToggle.AddBinding("<XRController>{RightHand}/primaryButton");
+            guideToggle.AddBinding("<XRController>{LeftHand}/primaryButton");    // X
+            guideToggle.AddBinding("<XRController>{RightHand}/primaryButton");   // A
             guideToggle.AddBinding("<XRController>{LeftHand}/menuButton");
             guideToggle.AddBinding("<XRController>{RightHand}/menuButton");
-            guideToggle.AddBinding("<Keyboard>/e");
+            guideToggle.AddBinding("<Keyboard>/x");   // desktop testing, mirrors the X face button
             guideToggle.Enable();
         }
 
@@ -148,7 +201,7 @@ namespace WhoCastThat.Tutorial
 
         private void OnAnnouncement(string _) { /* reserved for future step hooks */ }
 
-        // Guide Book can be toggled any time with the controller button (or E).
+        // Guide Book can be toggled any time with X on the left controller.
         private void Update()
         {
             if (guideToggle != null && guideToggle.WasPressedThisFrame() && controlsPanel != null)
@@ -163,11 +216,11 @@ namespace WhoCastThat.Tutorial
 
         private IEnumerator RunTutorial()
         {
-            // --- Step 1: guide book (press E) ---
-            SetBanner(1, "Welcome, wizard! Press the <b>A / X</b> button on your controller to open your Guide Book — flip through the controls, rules, cards and more.");
+            // --- Step 1: guide book (press X) ---
+            SetBanner(1, "Welcome, wizard! Press <b>X</b> on your left controller to open your Guide Book — flip through the controls, rules, cards and more.");
             SetNext("Continue →", true);
             yield return WaitUntil(() => guideEverOpened);
-            SetBanner(1, "Use the <b>← →</b> arrows to flip pages. Reopen the book anytime with the <b>A / X</b> button. Press <b>→</b> when ready.");
+            SetBanner(1, "Use the <b>← →</b> arrows to flip pages. Reopen the book anytime with <b>X</b>. Press <b>→</b> when ready.");
             yield return WaitForAdvance();
             ShowControls(false);
 
@@ -201,11 +254,11 @@ namespace WhoCastThat.Tutorial
             yield return WaitForAdvance();
 
             // --- Step 6: draw -> forced curse -> counterspell ---
-            SetBanner(6, "End your turn by drawing — put a hand into the cauldron. (This draw is rigged: you'll pull a CURSE!)");
+            SetBanner(6, "End your turn by drawing — reach either controller into the cauldron.");
             SetNext("Skip →", true);
-            // Fire the curse the instant a hand goes into the pot. Being cursed also blocks the
-            // normal brew, so the player never also draws a random potion in the same motion.
-            yield return WaitUntil(() => StirZone.LocalHandCanDraw || IsCursed());
+            // Fire the curse the instant either controller is in the pot. Being cursed also blocks
+            // the normal brew, so the player never also draws a random potion in the same motion.
+            yield return WaitUntil(() => HandInCauldron() || StirZone.LocalHandCanDraw || IsCursed());
             if (!IsCursed()) ForceCurse();
             SetBanner(6, "<color=#FF6B6B>You drew a CURSE!</color> Quick — drop your <b>Counterspell</b> in the ring to survive!");
             SetNext("Skip →", true);
@@ -215,7 +268,7 @@ namespace WhoCastThat.Tutorial
             yield return WaitForAdvance();
 
             // --- Step 7: win condition ---
-            SetBanner(7, "That's it! Keep casting and surviving. The last wizard who hasn't exploded WINS.");
+            SetBanner(7, "That's it! Keep casting and surviving. The last wizard who isn't cursed WINS.");
             SetNext("Finish →", true);
             yield return WaitForAdvance();
 
@@ -240,6 +293,61 @@ namespace WhoCastThat.Tutorial
         // In a solo tutorial every spawned potion is the local player's, so the scene count
         // is a good enough "did they cast one" signal.
         private int CountPotions() => FindObjectsByType<NetworkedPotion>(FindObjectsSortMode.None).Length;
+
+        /// <summary>
+        /// True as soon as EITHER controller is inside the cauldron.
+        ///
+        /// Deliberately a direct geometric test instead of StirZone.LocalHandCanDraw. That flag
+        /// additionally needs the pot to have settled, the hand to be empty, a cooldown to have
+        /// elapsed, CanBrew to be true, and OnTriggerEnter to have fired for a collider StirZone
+        /// recognises as the local hand — any one of which silently stalls the tutorial forever
+        /// with no error. For teaching the Curse, "a controller is in the pot" is the whole
+        /// condition, so that is what this asks.
+        /// </summary>
+        private bool HandInCauldron()
+        {
+            if (cauldronZones == null || cauldronZones.Length == 0)
+            {
+                // The scene has TWO pots: the floating CauldronRig (StirZone) that orbits to the
+                // active seat, and a static one on the table carrying the orphaned PotDrawZone.
+                // The player may reach into either, so both count.
+                var zones = new System.Collections.Generic.List<Collider>();
+                foreach (StirZone stir in FindObjectsByType<StirZone>(FindObjectsInactive.Include, FindObjectsSortMode.None))
+                {
+                    Collider c = stir.GetComponent<Collider>();
+                    if (c != null) zones.Add(c);
+                }
+                foreach (PotDrawZone pot in FindObjectsByType<PotDrawZone>(FindObjectsInactive.Include, FindObjectsSortMode.None))
+                {
+                    foreach (Collider c in pot.GetComponents<Collider>())
+                    {
+                        if (c.isTrigger && !zones.Contains(c)) zones.Add(c);
+                    }
+                }
+                cauldronZones = zones.ToArray();
+                if (cauldronZones.Length == 0) return false;
+            }
+
+            if (handPoints == null || handPoints.Length == 0)
+            {
+                var interactors = FindObjectsByType<UnityEngine.XR.Interaction.Toolkit.Interactors.XRBaseInteractor>(
+                    FindObjectsSortMode.None);
+                handPoints = Array.ConvertAll(interactors, i => i.transform);
+                if (handPoints.Length == 0) return false;   // rig not up yet; try again next frame
+            }
+
+            for (int z = 0; z < cauldronZones.Length; z++)
+            {
+                if (cauldronZones[z] == null) continue;
+                Bounds reach = cauldronZones[z].bounds;
+                reach.Expand(cauldronReachPadding * 2f);    // Expand adds half per side
+                for (int i = 0; i < handPoints.Length; i++)
+                {
+                    if (handPoints[i] != null && reach.Contains(handPoints[i].position)) return true;
+                }
+            }
+            return false;
+        }
 
         private bool IsCursed() =>
             NetworkedSpellGame.Instance != null && NetworkedSpellGame.Instance.IsLocalPlayerCursed;
@@ -313,34 +421,52 @@ namespace WhoCastThat.Tutorial
 
         private void BuildUI()
         {
+            // World space, not ScreenSpaceOverlay: an overlay canvas draws to the desktop window
+            // and is simply not present in the headset, so in VR this HUD did not exist at all.
+            // Left unparented so the 0.001 scale below is exactly metres, whatever transform the
+            // TutorialDriver object happens to carry.
             var canvasGo = new GameObject("TutorialHUD", typeof(RectTransform));
-            canvasGo.transform.SetParent(transform, false);
             var canvas = canvasGo.AddComponent<Canvas>();
-            canvas.renderMode = RenderMode.ScreenSpaceOverlay;
+            canvas.renderMode = RenderMode.WorldSpace;
             canvas.sortingOrder = 5000;
+            canvas.worldCamera = Camera.main;
             var scaler = canvasGo.AddComponent<CanvasScaler>();
-            scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
-            scaler.referenceResolution = new Vector2(1920, 1080);
-            scaler.matchWidthOrHeight = 0.5f;
-            canvasGo.AddComponent<GraphicRaycaster>();
+            scaler.dynamicPixelsPerUnit = 3f;      // keeps the text crisp at world scale
+            canvasGo.AddComponent<GraphicRaycaster>();              // mouse, for flat-screen testing
+            canvasGo.AddComponent<TrackedDeviceGraphicRaycaster>(); // controller rays in VR
 
-            // Bottom banner
+            // Keeping the 1920x1080 design rect means every anchor below still lands exactly where
+            // it did on a flat screen; 0.001 turns that rect into a 1.92m x 1.08m panel.
+            var canvasRect = canvasGo.GetComponent<RectTransform>();
+            canvasRect.sizeDelta = new Vector2(1920f, 1080f);
+            canvasGo.transform.localScale = Vector3.one * 0.001f;
+
+            hudFollow = canvasGo.AddComponent<TutorialHudFollow>();
+            hudFollow.distance = hudDistance;
+            hudFollow.heightOffset = hudHeightOffset;
+            hudFollow.SnapToView();
+
+            // Step banner. Anchored to the CENTRE of the canvas, not the bottom: bottom-anchored
+            // put it ~0.5 m below eye height, which is out of view once the player sits at the
+            // table and looks down at the ring.
             var banner = Panel(canvasGo.transform, new Color(0.05f, 0.02f, 0.12f, 0.92f));
             var brt = banner.GetComponent<RectTransform>();
-            brt.anchorMin = new Vector2(0.5f, 0f); brt.anchorMax = new Vector2(0.5f, 0f);
-            brt.pivot = new Vector2(0.5f, 0f);
-            brt.anchoredPosition = new Vector2(0, 60);
-            brt.sizeDelta = new Vector2(1400, 200);
+            brt.anchorMin = new Vector2(0.5f, 0.5f); brt.anchorMax = new Vector2(0.5f, 0.5f);
+            brt.pivot = new Vector2(0.5f, 0.5f);
+            brt.anchoredPosition = new Vector2(0, bannerOffsetY);
+            brt.sizeDelta = new Vector2(1750, 300);
 
-            bannerText = Text(banner.transform, "", 42, TextAlignmentOptions.Center);
+            bannerText = Text(banner.transform, "", 58, TextAlignmentOptions.Center);
             var trt = bannerText.rectTransform;
             trt.anchorMin = new Vector2(0, 0); trt.anchorMax = new Vector2(1, 1);
-            trt.offsetMin = new Vector2(120, 20); trt.offsetMax = new Vector2(-120, -16);
+            // Right inset is the larger one: it keeps the text clear of the arrow button.
+            trt.offsetMin = new Vector2(60, 26); trt.offsetMax = new Vector2(-170, -22);
 
             // Small arrow button in the bottom-right corner, clear of the text.
-            nextButton = MakeButton(banner.transform, "▸", new Vector2(1, 0),
-                new Vector2(-26, 26), new Vector2(88, 72), out nextLabel);
-            nextLabel.fontSize = 54;
+            // "→" not "▸": LiberationSans SDF has no U+25B8, so that glyph rendered as a hollow box.
+            nextButton = MakeButton(banner.transform, "→", new Vector2(1, 0),
+                new Vector2(-40, 40), new Vector2(140, 110), out nextLabel);
+            nextLabel.fontSize = 84;
             nextButton.onClick.AddListener(RequestAdvance);
             // Just the arrow glyph — no square button background (still clickable via the transparent image).
             nextButton.GetComponent<Image>().color = new Color(1f, 1f, 1f, 0f);
@@ -348,7 +474,7 @@ namespace WhoCastThat.Tutorial
             ncb.normalColor = ncb.highlightedColor = ncb.pressedColor = ncb.selectedColor = new Color(1f, 1f, 1f, 0f);
             nextButton.colors = ncb;
 
-            // Guide Book (opened with E) — a flip-book laid over the uploaded open-book image.
+            // Guide Book (opened with X) — a flip-book laid over the uploaded open-book image.
             controlsPanel = new GameObject("GuideBook", typeof(RectTransform), typeof(Image));
             controlsPanel.transform.SetParent(canvasGo.transform, false);
             var bookImg = controlsPanel.GetComponent<Image>();
@@ -365,7 +491,9 @@ namespace WhoCastThat.Tutorial
             var crt = controlsPanel.GetComponent<RectTransform>();
             crt.anchorMin = new Vector2(0.5f, 0.5f); crt.anchorMax = new Vector2(0.5f, 0.5f);
             crt.pivot = new Vector2(0.5f, 0.5f);
-            crt.anchoredPosition = new Vector2(0, 80);
+            // Negative local Z is toward the player: the canvas faces away from the head, so this
+            // lifts the book off the HUD plane and brings it into comfortable reading range.
+            crt.anchoredPosition3D = new Vector3(0, bookOffsetY, -bookForwardOffset);
             crt.sizeDelta = new Vector2(1450, 997); // matches the 602x414 book image aspect so text sits on the pages
 
             Color ink = new Color(0.24f, 0.16f, 0.09f);
@@ -419,10 +547,45 @@ namespace WhoCastThat.Tutorial
             finishPanel.SetActive(false);
         }
 
+        /// <summary>
+        /// Plays the next narration line. Driven straight from SetBanner, so the recordings stay in
+        /// lock-step with what is on screen: line 1 with the first banner, then one per arrow press
+        /// or completed action. Running past the end of the list is not an error — the tutorial just
+        /// goes quiet, which is what happens when fewer lines are recorded than there are steps.
+        /// </summary>
+        private void SayNext()
+        {
+            if (voiceLines == null || voiceIndex >= voiceLines.Length) { voiceIndex++; return; }
+            Say(voiceLines[voiceIndex++]);
+        }
+
+        /// <summary>
+        /// Plays one line, cutting off whatever was still talking — two banners' narration
+        /// overlapping would make both unintelligible. A null clip is silently ignored.
+        /// </summary>
+        private void Say(AudioClip clip)
+        {
+            if (clip == null) return;
+            if (voiceSource == null)
+            {
+                voiceSource = gameObject.AddComponent<AudioSource>();
+                voiceSource.playOnAwake = false;
+                voiceSource.spatialBlend = 0f;   // narration is 2D: same in both ears, wherever the player looks
+            }
+            voiceSource.Stop();
+            voiceSource.volume = voiceVolume;
+            voiceSource.clip = clip;
+            voiceSource.Play();
+        }
+
         private void SetBanner(int step, string msg)
         {
             if (bannerText != null)
-                bannerText.text = $"<size=28><color=#B78BFF>STEP {step} / {TotalSteps}</color></size>\n{msg}";
+                bannerText.text = $"<size=38><color=#B78BFF>STEP {step} / {TotalSteps}</color></size>\n{msg}";
+
+            // Narration advances with the banner, never separately — that is what keeps recording N
+            // on screen N without every call site having to remember to play it.
+            SayNext();
         }
 
         // The banner text carries the instruction, so the advance control is always just an
@@ -484,8 +647,9 @@ namespace WhoCastThat.Tutorial
             var go = new GameObject("Text", typeof(RectTransform));
             go.transform.SetParent(parent, false);
             var tmp = go.AddComponent<TextMeshProUGUI>();
+            if (uiFont != null) tmp.font = uiFont;   // every tutorial label goes through here
             tmp.text = text; tmp.fontSize = size; tmp.alignment = align;
-            tmp.color = new Color(0.96f, 0.93f, 1f); tmp.enableWordWrapping = true;
+            tmp.color = new Color(0.96f, 0.93f, 1f); tmp.textWrappingMode = TextWrappingModes.Normal;
             return tmp;
         }
 
