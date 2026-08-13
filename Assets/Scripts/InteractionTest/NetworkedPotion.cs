@@ -73,6 +73,10 @@ namespace WhoCastThat.Interactions
         // Which way the tint was last resolved, so the slow tick can spot ownership changing.
         private bool tintedAsMine;
 
+        // Whether the grab gate is currently shut, so the tick only touches the interactable
+        // when the answer actually flips rather than every time it runs.
+        private bool grabBlocked;
+
 
         // Owner-write so the authority can set the type when it spawns the potion.
         private readonly NetworkVariable<int> networkedType = new(
@@ -194,6 +198,8 @@ namespace WhoCastThat.Interactions
                 ApplyVisual();
             }
 
+            ApplyGrabGate();
+
             if (!showCastableGlow)
             {
                 return;
@@ -206,6 +212,36 @@ namespace WhoCastThat.Interactions
                             && game.CanLocalPlayerCastNow(Type);
 
             SetGlow(castable);
+        }
+
+        /// <summary>
+        /// Opponents' potions are not yours to touch. Without this a player can lift a card
+        /// straight out of someone else's rack and throw it across the room — which is worse than
+        /// griefing, because the potion is still in that player's hand as far as the rules are
+        /// concerned, so the table stops agreeing with what the rules think is true.
+        ///
+        /// Rides the same slow tick as the tint because it answers the same question, and that
+        /// question has no answer at spawn time.
+        /// </summary>
+        private void ApplyGrabGate()
+        {
+            if (grab == null)
+            {
+                return;
+            }
+
+            bool blocked = BelongsToAnotherPlayer();
+            if (blocked == grabBlocked)
+            {
+                return;
+            }
+
+            grabBlocked = blocked;
+
+            // Disabling the interactable unregisters it from the interaction manager, so the
+            // ray neither grabs nor highlights it. The colliders stay, so the potion is still a
+            // solid object on the table.
+            grab.enabled = !blocked;
         }
 
         private void SetGlow(bool on)
@@ -320,6 +356,27 @@ namespace WhoCastThat.Interactions
 
             int localSeat = game.LocalSeatIndex;
             return localSeat >= 0 && ownerSeat.Value == localSeat;
+        }
+
+        /// <summary>
+        /// True when this potion demonstrably belongs to a DIFFERENT seat than the local player's.
+        ///
+        /// Deliberately NOT the negation of <see cref="BelongsToLocalPlayer"/>. Both seats start
+        /// unknown and resolve a replication tick later, and a potion placed in the scene by hand
+        /// for testing has no seat at all — all of which read as "not mine". Refusing the grab on
+        /// those would make a freshly drawn potion briefly unpickable and break loose test
+        /// potions outright, so only a KNOWN mismatch counts.
+        /// </summary>
+        public bool BelongsToAnotherPlayer()
+        {
+            NetworkedSpellGame game = NetworkedSpellGame.Instance;
+            if (game == null)
+            {
+                return false;
+            }
+
+            int localSeat = game.LocalSeatIndex;
+            return ownerSeat.Value >= 0 && localSeat >= 0 && ownerSeat.Value != localSeat;
         }
 
         /// <summary>Authority-only: record the rack slot this potion returns to when dropped.</summary>

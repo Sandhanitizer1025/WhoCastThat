@@ -10,7 +10,7 @@ namespace WhoCastThat.Flow
     /// <summary>
     /// The in-game pause menu: volume, leave the match, quit.
     ///
-    /// Summoned with the controller's MENU button, and the panel is then WORLD-LOCKED where it
+    /// Summoned with the LEFT controller's Y button, and the panel is then WORLD-LOCKED where it
     /// appeared rather than following the head. That is the convention every comfortable VR game
     /// uses, and the reason is not stylistic: a panel welded to your face cannot be looked away
     /// from, permanently occludes the table, and is a known source of discomfort. World-locking
@@ -65,19 +65,27 @@ namespace WhoCastThat.Flow
             }
         }
 
-        // Read the menu button straight off the XR devices rather than through an action asset.
+        // Read the button straight off the XR devices rather than through an action asset.
         // The action maps are the template's and differ between the hands/controllers rigs, so
         // binding by hand here keeps this working without touching that wiring. Escape is the
         // editor fallback, where there is no controller at all.
+        //
+        // The button is Y: on a Quest 3 Touch Plus that is the LEFT controller's secondary face
+        // button (left X/Y = primary/secondary, right A/B = primary/secondary). Requiring
+        // Controller as well as Left excludes tracked hands, which report HeldInHand but have no
+        // face buttons to press.
         private bool MenuPressedThisFrame()
         {
             bool held = false;
 
             devices.Clear();
-            InputDevices.GetDevicesWithCharacteristics(InputDeviceCharacteristics.HeldInHand, devices);
+            InputDevices.GetDevicesWithCharacteristics(
+                InputDeviceCharacteristics.HeldInHand |
+                InputDeviceCharacteristics.Controller |
+                InputDeviceCharacteristics.Left, devices);
             for (int i = 0; i < devices.Count; i++)
             {
-                if (devices[i].TryGetFeatureValue(CommonUsages.menuButton, out bool pressed) && pressed)
+                if (devices[i].TryGetFeatureValue(CommonUsages.secondaryButton, out bool pressed) && pressed)
                 {
                     held = true;
                     break;
