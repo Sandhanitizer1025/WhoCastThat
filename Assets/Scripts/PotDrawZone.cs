@@ -32,6 +32,16 @@ public class PotDrawZone : MonoBehaviour
 
         if (anyInteractor != null || isHand)
         {
+            // This is the old single-player prototype's draw path. TutorialScene has no
+            // PotionGameManager at all, so gameManager is null there and this threw a
+            // NullReferenceException on every dip into the pot.
+            if (gameManager == null)
+            {
+                Debug.LogWarning("[POT] No PotionGameManager assigned; ignoring the dip. " +
+                                 "This component is left over from the old prototype scene.", this);
+                return;
+            }
+
             Debug.Log("[POT SUCCESS] Hand verified! Calling GameManager to spawn potion...");
             nextDrawTime = Time.time + drawCooldown;
             gameManager.DrawPotionFromPot(other.transform.position, other.transform.rotation);
