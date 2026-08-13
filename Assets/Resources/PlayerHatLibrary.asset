@@ -33,6 +33,6 @@ MonoBehaviour:
       type: 3}
     label: Yellow
     colour: {r: 0.95, g: 0.85, b: 0.25, a: 1}
-  heightOffset: 0.1
-  forwardOffset: 0.01
-  widthMetres: 0.3
+  heightOffset: 0.074
+  forwardOffset: 0
+  widthMetres: 0.496

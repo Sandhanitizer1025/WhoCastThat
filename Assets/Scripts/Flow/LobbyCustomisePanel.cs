@@ -40,11 +40,24 @@ namespace WhoCastThat.Flow
         private MagicMirrorMenu menu;
 
         private GameObject panel;
-        private Transform stage;        // where the preview head lives
+        private Transform previewRoot;  // everything; toggled with the panel
+        private Transform stage;        // spins inside the root; the head and hat only
         private Transform hatMount;
         private GameObject wornPreview;
         private Camera previewCamera;
         private RenderTexture previewTexture;
+
+        // Height of the mannequin's eyes above the stage origin. The whole seating calculation
+        // hangs off this: PlayerHat measures from player.head, which the template drives straight
+        // from the camera and is therefore AT eye level, but the Avatar_Head node this preview is
+        // built from is pivoted at the NECK. Applying the runtime offset to the wrong origin is
+        // what put the hat around the mannequin's throat.
+        private float previewEyeHeight;
+
+        // The visor. A plain MeshRenderer with honest bounds, unlike the head's
+        // SkinnedMeshRenderer, whose rest-pose bounding volume reports nearly twice the real
+        // extent and would drag the camera framing out with it.
+        private Renderer previewFaceRenderer;
 
         private readonly System.Collections.Generic.List<Outline> marks = new();
         private readonly System.Collections.Generic.List<Color> colours = new();
@@ -130,8 +143,16 @@ namespace WhoCastThat.Flow
 
         private void BuildStage()
         {
+            // Root holds everything and is what gets switched off with the panel. The stage inside
+            // it is the only part that spins, so the camera and lights stay put while the head
+            // turns — the reason they are siblings of the stage rather than children.
+            var rootGo = new GameObject("HatPreviewRoot");
+            rootGo.transform.position = StageOrigin;
+            previewRoot = rootGo.transform;
+
             var stageGo = new GameObject("HatPreviewStage");
-            stageGo.transform.position = StageOrigin;
+            stageGo.transform.SetParent(previewRoot, false);
+            stageGo.transform.localPosition = Vector3.zero;
             stage = stageGo.transform;
 
             // Borrow the head from the rig's offline avatar so the preview is the same head the
@@ -142,25 +163,49 @@ namespace WhoCastThat.Flow
                 GameObject copy = Instantiate(head.gameObject, stage);
                 copy.name = "PreviewHead";
                 copy.transform.localPosition = Vector3.zero;
-                copy.transform.localRotation = Quaternion.identity;
+
+                // Turned to face the camera. The avatar's forward is +Z and the camera looks along
+                // +Z from behind it, so at identity the player is introduced to the back of their
+                // own head.
+                copy.transform.localRotation = Quaternion.Euler(0f, 180f, 0f);
+
+                // Instantiating out of the rig drops the parent's scale, so the mannequin would
+                // come out 10% smaller than the head the player actually wears.
+                copy.transform.localScale = head.lossyScale;
+
                 StripBehaviours(copy);
                 SetActiveDeep(copy);
+                MeasureFace(copy);
             }
 
             hatMount = new GameObject("HatMount").transform;
             hatMount.SetParent(stage, false);
 
+            // Deliberately NOT parented to the stage. Riding the stage, the light turned away with
+            // the head and left whichever side was facing the camera in near-darkness — the face
+            // in particular, since it starts turned toward us. Fixed in world space, it lights
+            // whatever the spin brings round to the front.
             var light = new GameObject("PreviewLight").AddComponent<Light>();
-            light.transform.SetParent(stage, false);
-            light.transform.localPosition = new Vector3(0.4f, 0.6f, -0.6f);
+            light.transform.SetParent(previewRoot, false);
+            light.transform.localPosition = new Vector3(0.4f, 0.6f, -0.9f);
             light.type = LightType.Point;
             light.range = 4f;
             light.intensity = 3f;
 
+            // A second, dimmer light opposite it so the silhouette never goes fully black as the
+            // head turns; one lamp on a spinning subject reads as a strobe.
+            var fill = new GameObject("PreviewFillLight").AddComponent<Light>();
+            fill.transform.SetParent(previewRoot, false);
+            fill.transform.localPosition = new Vector3(-0.6f, 0.2f, -0.5f);
+            fill.type = LightType.Point;
+            fill.range = 4f;
+            fill.intensity = 1.2f;
+
             // Deliberately NOT parented to the stage: the stage rotates, and a camera riding it
             // would turn with the head and show a motionless portrait.
             var camGo = new GameObject("HatPreviewCamera");
-            camGo.transform.position = StageOrigin + new Vector3(0f, 0.12f, -0.85f);
+            camGo.transform.SetParent(previewRoot, false);
+            camGo.transform.localPosition = new Vector3(0f, 0.12f, -0.85f);
             camGo.transform.LookAt(StageOrigin);
 
             previewTexture = new RenderTexture(512, 512, 16) { name = "HatPreviewTexture" };
@@ -176,6 +221,41 @@ namespace WhoCastThat.Flow
             // physically cannot see the lobby, which is why no culling layer is needed.
             previewCamera.farClipPlane = 5f;
             previewCamera.enabled = false; // only renders while the panel is open
+        }
+
+        /// <summary>
+        /// Work out where the mannequin's eyes are, from the visor rather than from the head.
+        ///
+        /// The visor is a plain MeshRenderer sitting on the face, so its centre is a good stand-in
+        /// for eye level. The head itself is a SkinnedMeshRenderer whose bounds are a rest-pose
+        /// volume running from below the neck to well above the crown — measuring from that would
+        /// be measuring from something the player never sees.
+        /// </summary>
+        private void MeasureFace(GameObject copy)
+        {
+            Renderer[] rs = copy.GetComponentsInChildren<Renderer>(true);
+            for (int i = 0; i < rs.Length; i++)
+            {
+                if (rs[i] is SkinnedMeshRenderer)
+                {
+                    continue;
+                }
+
+                previewFaceRenderer = rs[i];
+                previewEyeHeight = rs[i].bounds.center.y - stage.position.y;
+                return;
+            }
+
+            // No visor found: fall back to the middle of whatever IS there, which is wrong by less
+            // than assuming the pivot is at eye level.
+            if (rs.Length > 0)
+            {
+                Bounds b = rs[0].bounds;
+                for (int i = 1; i < rs.Length; i++) { b.Encapsulate(rs[i].bounds); }
+                previewEyeHeight = b.center.y - stage.position.y;
+                Debug.LogWarning("[LobbyFlow] No visor mesh on the preview head — hat seating is " +
+                                 "approximate.");
+            }
         }
 
         private static Transform FindOfflineAvatarHead()
@@ -225,9 +305,9 @@ namespace WhoCastThat.Flow
 
         private void SetStageActive(bool on)
         {
-            if (stage != null)
+            if (previewRoot != null)
             {
-                stage.gameObject.SetActive(on);
+                previewRoot.gameObject.SetActive(on);
             }
             if (previewCamera != null)
             {
@@ -385,16 +465,32 @@ namespace WhoCastThat.Flow
                 return;
             }
 
-            Renderer[] rs = stage.GetComponentsInChildren<Renderer>(true);
-            if (rs.Length == 0)
+            // Framed on the visor and the hat only. Including the head's SkinnedMeshRenderer would
+            // frame its rest-pose bounding volume instead of the head -- nearly twice the real
+            // extent -- pushing the camera back and leaving the subject small in a sea of empty
+            // background.
+            bool any = false;
+            Bounds b = new Bounds();
+
+            if (previewFaceRenderer != null)
             {
-                return;
+                b = previewFaceRenderer.bounds;
+                any = true;
             }
 
-            Bounds b = rs[0].bounds;
-            for (int i = 1; i < rs.Length; i++)
+            if (wornPreview != null)
             {
-                b.Encapsulate(rs[i].bounds);
+                Renderer[] hr = wornPreview.GetComponentsInChildren<Renderer>(true);
+                for (int i = 0; i < hr.Length; i++)
+                {
+                    if (!any) { b = hr[i].bounds; any = true; }
+                    else { b.Encapsulate(hr[i].bounds); }
+                }
+            }
+
+            if (!any)
+            {
+                return;
             }
 
             // Radius rather than height: the stage spins, so the widest silhouette it will ever
@@ -438,7 +534,11 @@ namespace WhoCastThat.Flow
             for (int i = 1; i < rs.Length; i++) { b.Encapsulate(rs[i].bounds); }
 
             float baseBelowPivot = hat.transform.position.y - b.min.y;
-            hat.transform.localPosition = new Vector3(0f, library.HeightOffset + baseBelowPivot, 0f);
+
+            // Measured from the EYES, exactly as PlayerHat does at runtime -- the mannequin's own
+            // pivot is at the neck, so the runtime offset alone would seat the hat on its throat.
+            hat.transform.localPosition =
+                new Vector3(0f, previewEyeHeight + library.HeightOffset + baseBelowPivot, 0f);
         }
 
         // ---- widgets ----
