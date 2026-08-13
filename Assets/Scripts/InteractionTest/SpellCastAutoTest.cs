@@ -113,8 +113,10 @@ namespace WhoCastThat.Interactions
             {
                 ReportHandAndConcealment(game);
             }
+            ReportNames(game);
             StartCoroutine(WatchInterruptWindow(game));
 
+            bool cursePlacementTested = false;
             int casts = 0;
             float stop = Time.time + 180f;
 
@@ -128,6 +130,20 @@ namespace WhoCastThat.Interactions
                     L($"ANSWERING with Dispel at {game.InterruptSecondsRemaining:0.00}s left");
                     game.RequestCast(PotionType.Dispel, ulong.MaxValue);
                     yield return new WaitForSeconds(1.5f);
+                    continue;
+                }
+
+                // Once, on our own turn: force a Curse onto ourselves and counter it, which is
+                // the only way to reach BeginCursePlacement. Verifies the placement picker is
+                // actually built on the chooser's client — the half of that feature no amount of
+                // reading the code can confirm.
+                if (!cursePlacementTested &&
+                    game.LocalSeatIndex == game.CurrentSeatIndex &&
+                    !game.InterruptWindowOpen &&
+                    HoldsLocally(game, PotionType.Counterspell))
+                {
+                    cursePlacementTested = true;
+                    yield return CursePlacementProbe(game);
                     continue;
                 }
 
@@ -159,6 +175,87 @@ namespace WhoCastThat.Interactions
             }
 
             L($"DONE casts={casts} gameActive={game.GameActive} lastResolved={LastResolved(game)}");
+        }
+
+        // Curse -> Counterspell -> placement picker, end to end.
+        private IEnumerator CursePlacementProbe(NetworkedSpellGame game)
+        {
+            L("CURSE PROBE: drawing a Curse onto myself");
+            game.DebugDrawCurse();
+            yield return new WaitForSeconds(1.5f);
+
+            L($"CURSE PROBE: cursed={game.IsLocalPlayerCursed}");
+            if (!game.IsLocalPlayerCursed)
+            {
+                L("CURSE PROBE ABORTED: the debug curse did not land.");
+                yield break;
+            }
+
+            L("CURSE PROBE: answering with Counterspell");
+            game.RequestCast(PotionType.Counterspell, ulong.MaxValue);
+            yield return new WaitForSeconds(2f);
+
+            // The picker is local presentation, so this only reads true on the chooser's client.
+            L($"CURSE PROBE: placementPending={game.CursePlacementPending} " +
+              $"isMyChoice={game.IsLocalPlayerPlacingCurse} " +
+              $"pickerActive={PickerActive()} prompt='{TributeTargetPicker.Prompt}' " +
+              $"boxes={PickerBoxCount()}");
+
+            if (game.IsLocalPlayerPlacingCurse)
+            {
+                // Stand in for the trigger press, which cannot be synthesised here. This is the
+                // one thing the probe does NOT prove: that looking at a box and pulling the
+                // trigger selects it. Only a headset can show that.
+                L("CURSE PROBE: choosing TOP (0) programmatically");
+                game.ChooseCursePlacement(0);
+                yield return new WaitForSeconds(2f);
+                L($"CURSE PROBE DONE: placementPending={game.CursePlacementPending} " +
+                  $"pickerActive={PickerActive()} currentSeat={game.CurrentSeatIndex}");
+            }
+        }
+
+        private static bool PickerActive()
+        {
+            TributeTargetPicker p = Object.FindFirstObjectByType<TributeTargetPicker>();
+            return p != null && p.Active;
+        }
+
+        // Counts the boxes the picker actually built, so "the picker exists" is not inferred
+        // from a bool alone.
+        private static int PickerBoxCount()
+        {
+            int n = 0;
+            foreach (PotionLabel label in
+                     Object.FindObjectsByType<PotionLabel>(FindObjectsSortMode.None))
+            {
+                if (label != null && label.transform.parent != null &&
+                    label.transform.parent.name.StartsWith("TributeTarget_"))
+                {
+                    n++;
+                }
+            }
+            return n;
+        }
+
+        // Usernames: PlayerLabel prefers the replicated profile name over "Player N", so this
+        // shows whether the signed-in username actually reached the session.
+        private void ReportNames(NetworkedSpellGame game)
+        {
+            NetworkManager nm = NetworkManager.Singleton;
+            if (nm == null)
+            {
+                return;
+            }
+
+            var sb = new System.Text.StringBuilder();
+            foreach (ulong id in nm.ConnectedClientsIds)
+            {
+                sb.Append(id).Append("='").Append(game.PlayerLabel(id)).Append("' ");
+            }
+
+            L($"NAMES local={nm.LocalClientId} " +
+              $"localName='{XRMultiplayer.XRINetworkGameManager.LocalPlayerName.Value}' " +
+              $"savedUsername='{WhoCastThat.Flow.PlayerIdentity.SavedUsername}' all: {sb}");
         }
 
         // Samples the countdown while a window is open. This is the evidence that the replicated
