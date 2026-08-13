@@ -202,6 +202,16 @@ geometry out from under numbers taken in the old orientation.
 commented "Quit sits at y=-420". Both stopped being true two layouts ago. The menu now owns
 `RowPosition()` and attachments ask for the next row.
 
+### 6k. A reference can be "assigned" and still be dangling on every other machine
+The tutorial stayed silent after `0ca3946` "fixed" it. All 11 slots were filled in the scene YAML
+and the author verified them in play mode — but the GUIDs belonged to a **local** copy of the clips
+whose `.meta` files were never committed. `git log -S <guid> -- "*.meta"` found them in no commit on
+any branch. `Say()` skips a null clip silently, so the symptom was identical to the original bug.
+
+**How to check in one line:** compare the GUIDs a scene asks for against the GUIDs the assets
+actually have. If a `.meta` is untracked, everyone but the author gets a broken reference.
+**Committing an asset is not enough — the `.meta` beside it carries the GUID every reference uses.**
+
 ### 6j. Assorted traps
 - **`.m4a` cannot be imported by Unity.** Convert to mp3/wav/ogg or clips silently don't exist.
 - **Renaming audio outside Unity breaks asset references** — rename in the Project window instead.
