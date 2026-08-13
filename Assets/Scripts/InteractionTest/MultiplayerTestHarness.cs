@@ -137,6 +137,9 @@ namespace WhoCastThat.Interactions
         {
             if (XRINetworkGameManager.Instance != null)
             {
+                // The lobby normally does this, but entering the game scene directly skips it.
+                // Without it a rules test runs with everyone called "Player".
+                PlayerIdentity.Apply();
                 XRINetworkGameManager.Instance.QuickJoinLobby();
             }
         }

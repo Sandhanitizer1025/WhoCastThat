@@ -96,15 +96,12 @@ namespace WhoCastThat.Flow
             return reason;
         }
 
-        // Written by FirebaseLoginManager on a successful login/sign-up in BootScene.
-        const string LocalUsernameKey = "PlayerUsername";
-
         /// <summary>
         /// Room name built from the signed-in player's name, shared by Host and Quick Play.
         /// </summary>
         public static string SuggestedRoomName()
         {
-            string saved = PlayerPrefs.GetString(LocalUsernameKey, "");
+            string saved = PlayerIdentity.SavedUsername;
             return (string.IsNullOrEmpty(saved) ? "Mage" : saved) + "'s Room";
         }
     }

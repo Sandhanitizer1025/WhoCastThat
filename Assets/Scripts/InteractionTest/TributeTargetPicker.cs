@@ -42,7 +42,15 @@ namespace WhoCastThat.Interactions
         /// <summary>Prompt shown by the HUD while the picker is up.</summary>
         public static string Prompt { get; private set; }
 
-        public void Show(ulong[] ids, string[] names, Action<ulong> picked)
+        /// <summary>
+        /// Put a row of labelled boxes in front of the player and call <paramref name="picked"/>
+        /// with the id of whichever one they look at and trigger.
+        ///
+        /// The ids are opaque to this component, so this serves any "choose one of these" moment,
+        /// not only Tribute — Curse placement passes the placement index in the same slot. Pass a
+        /// <paramref name="prompt"/> to say what the choice is; it defaults to the Tribute wording.
+        /// </summary>
+        public void Show(ulong[] ids, string[] names, Action<ulong> picked, string prompt = null)
         {
             Hide();
 
@@ -61,7 +69,9 @@ namespace WhoCastThat.Interactions
 
             candidates = ids;
             onPicked = picked;
-            Prompt = "LOOK at a mage and PRESS THE TRIGGER to take their potion";
+            Prompt = string.IsNullOrEmpty(prompt)
+                ? "LOOK at a mage and PRESS THE TRIGGER to take their potion"
+                : prompt;
 
             Vector3 forward = view.transform.forward;
             forward.y = 0f;

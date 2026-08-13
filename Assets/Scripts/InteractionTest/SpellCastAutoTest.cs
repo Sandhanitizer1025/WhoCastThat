@@ -26,6 +26,27 @@ namespace WhoCastThat.Interactions
 
         private const int MaxCasts = 6;
 
+        // Toggle from the menu so this can never be left on invisibly. It installs itself into
+        // EVERY process including the MPPM clone, which means the other player starts casting on
+        // its own — correct for a scripted test, alarming if you did not know it was running.
+        private const string MenuPath = "Who Cast That/Auto-play spell test (MPPM)";
+
+        [UnityEditor.MenuItem(MenuPath)]
+        private static void Toggle()
+        {
+            bool on = !UnityEditor.EditorPrefs.GetBool(EnabledKey, false);
+            UnityEditor.EditorPrefs.SetBool(EnabledKey, on);
+            Debug.Log($"[AutoTest] scripted spell casting is now {(on ? "ON" : "OFF")}. " +
+                      "It drives every client, the MPPM clone included.");
+        }
+
+        [UnityEditor.MenuItem(MenuPath, isValidateFunction: true)]
+        private static bool ToggleValidate()
+        {
+            UnityEditor.Menu.SetChecked(MenuPath, UnityEditor.EditorPrefs.GetBool(EnabledKey, false));
+            return !Application.isPlaying;
+        }
+
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void Install()
         {

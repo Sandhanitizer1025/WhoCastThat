@@ -149,6 +149,22 @@ namespace WhoCastThat.Interactions
                 return "<color=#FF6B6B><b>YOU ARE CURSED</b> — drop a Counterspell on the table centre!</color>";
             }
 
+            // A picker is on screen and the game is waiting on THIS player. Its own prompt says
+            // what to do, so echo that rather than writing a second set of words for the same
+            // moment. Both Tribute and Curse placement land here.
+            if (!string.IsNullOrEmpty(TributeTargetPicker.Prompt))
+            {
+                return $"<color=#FFE066><b>{TributeTargetPicker.Prompt}</b></color>";
+            }
+
+            // Someone else is choosing. Without this the table sat on a stale "waiting for X..."
+            // with no hint that the match was blocked on a decision rather than stalled.
+            if (game.CursePlacementPending)
+            {
+                return "<color=#B9A9D9>A Curse was countered — the mage who saved themselves is " +
+                       "hiding it back in the cauldron...</color>";
+            }
+
             // A spell is on the table. Dispel is the ONLY card playable out of turn — Reflection
             // is a your-turn copy and the authority refuses it here, so naming it in this prompt
             // sent players hunting for a card that could not work.

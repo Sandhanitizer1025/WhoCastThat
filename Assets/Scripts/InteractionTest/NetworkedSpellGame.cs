@@ -443,7 +443,9 @@ namespace WhoCastThat.Interactions
         private Coroutine tributeRoutine;
         private Coroutine tributeTargetRoutine;
         private ForesightDisplay foresightDisplay;
-        private TributeTargetPicker tributePicker;
+        // One picker instance serves both Tribute and Curse placement — they can never be on
+        // screen at the same time, and sharing it means a stale one cannot be left behind.
+        private TributeTargetPicker choicePicker;
 
         public override void OnNetworkSpawn()
         {
@@ -451,6 +453,11 @@ namespace WhoCastThat.Interactions
 
             announcement.OnValueChanged += OnAnnouncementValueChanged;
             currentTurnIndex.OnValueChanged += OnTurnIndexValueChanged;
+
+            // Curse placement shows its picker straight off the replicated state rather than a
+            // dedicated RPC: the authority already has to publish who is choosing so everyone
+            // else can be told to wait, so the chooser's own client can act on the same value.
+            cursePlacementPlayer.OnValueChanged += OnCursePlacementPlayerChanged;
 
             if (HasAuthority)
             {
@@ -584,6 +591,13 @@ namespace WhoCastThat.Interactions
         {
             announcement.OnValueChanged -= OnAnnouncementValueChanged;
             currentTurnIndex.OnValueChanged -= OnTurnIndexValueChanged;
+            cursePlacementPlayer.OnValueChanged -= OnCursePlacementPlayerChanged;
+
+            // A picker left on screen would outlive the match it belongs to.
+            if (choicePicker != null)
+            {
+                choicePicker.Hide();
+            }
 
             if (HasAuthority && NetworkManager != null)
             {
@@ -2011,9 +2025,9 @@ namespace WhoCastThat.Interactions
         [Rpc(SendTo.SpecifiedInParams)]
         private void TributeChoiceRpc(ulong[] ids, RpcParams rpcParams)
         {
-            if (tributePicker == null)
+            if (choicePicker == null)
             {
-                tributePicker = gameObject.AddComponent<TributeTargetPicker>();
+                choicePicker = gameObject.AddComponent<TributeTargetPicker>();
             }
 
             var names = new string[ids.Length];
@@ -2022,7 +2036,7 @@ namespace WhoCastThat.Interactions
                 names[i] = PlayerLabel(ids[i]);
             }
 
-            tributePicker.Show(ids, names, ChooseTributeTarget);
+            choicePicker.Show(ids, names, ChooseTributeTarget);
         }
 
         /// <summary>
@@ -2240,6 +2254,52 @@ namespace WhoCastThat.Interactions
         /// the next player — and randomised the deck order that Foresight depends on. The player
         /// now chooses, and the turn does not pass until they have.
         /// </summary>
+        // Runs on EVERY client. Only the player actually choosing builds anything; the rest just
+        // make sure no stale picker is left standing if the choice resolved without them.
+        private void OnCursePlacementPlayerChanged(ulong previous, ulong current)
+        {
+            if (NetworkManager == null)
+            {
+                return;
+            }
+
+            if (current == NetworkManager.LocalClientId)
+            {
+                ShowCursePlacementPicker();
+            }
+            else if (choicePicker != null)
+            {
+                choicePicker.Hide();
+            }
+        }
+
+        // The four placements, as a row of boxes the chooser looks at and triggers. Before this
+        // existed the only way to answer was the keyboard (Ctrl+1..4), which does not exist in a
+        // headset — so in VR the announcement asked for a choice that could not be made, and every
+        // Counterspell sat until CursePlacementTimeout buried the Curse at random.
+        //
+        // Deliberately does NOT say how many cards are in the deck: the whole point of choosing is
+        // that only the chooser knows where the Curse went.
+        private void ShowCursePlacementPicker()
+        {
+            if (choicePicker == null)
+            {
+                choicePicker = gameObject.AddComponent<TributeTargetPicker>();
+            }
+
+            var ids = new ulong[] { 0, 1, 2, (ulong)RandomPlacement };
+            var names = new[]
+            {
+                "TOP\nthe very next draw",
+                "SECOND\none draw away",
+                "THIRD\ntwo draws away",
+                "LOST\nanywhere in the cauldron"
+            };
+
+            choicePicker.Show(ids, names, id => ChooseCursePlacement((int)id),
+                "LOOK at a slot and PRESS THE TRIGGER to hide the Curse");
+        }
+
         private void BeginCursePlacement(ulong playerId)
         {
             cursePlacementPlayer.Value = playerId;

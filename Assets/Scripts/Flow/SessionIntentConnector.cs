@@ -60,6 +60,10 @@ namespace WhoCastThat.Flow
 
             HandledConnection = true;
 
+            // Name the player before the connection, so the name is already correct when
+            // XRINetworkPlayer spawns and copies it into its replicated field.
+            PlayerIdentity.Apply();
+
             // The manager authenticates in Awake. Arriving from BootScene the Firebase OIDC
             // sign-in has already happened, so AuthenticationManager skips both the UGS init
             // and the anonymous sign-in and just caches the Firebase-backed PlayerId.
