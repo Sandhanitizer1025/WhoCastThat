@@ -302,9 +302,13 @@ namespace WhoCastThat.Interactions
 
             // A spell is waiting on the table. Dispel is the ONLY card that plays out of turn —
             // this is what a player wants to spot during someone else's turn.
+            //
+            // "Out of turn" excludes the caster, who is by definition the player whose turn it
+            // is. Without that clause a caster's own Dispel lit up while their spell was on the
+            // table, inviting them to cancel it — which the authority then allowed.
             if (InterruptWindowOpen)
             {
-                return type == PotionType.Dispel;
+                return type == PotionType.Dispel && !IsLocalPlayersTurn;
             }
 
             if (!IsLocalPlayersTurn)
@@ -1603,6 +1607,20 @@ namespace WhoCastThat.Interactions
             // 1) Interrupts resolve first. Dispel is the only card playable out of turn.
             if (pendingActive && type == PotionType.Dispel)
             {
+                // ...and OUT OF TURN is the whole of it: the caster may not answer their own
+                // spell. Nothing stopped them before, so casting Foresight and then dispelling
+                // it yourself was legal — you kept the peek at the deck, cancelled your own
+                // spell, and spent a Dispel doing it, because the potion was consumed above
+                // this check. Refuse without consuming, the same as any other card played with
+                // nothing to answer.
+                if (casterId == pending.Caster)
+                {
+                    LogCast($"REFUSED Dispel from {PlayerLabel(casterId)}: cannot dispel your own spell.");
+                    SetAnnouncement($"{PlayerLabel(casterId)} cannot dispel their own spell.");
+                    RejectPotion(potionId);
+                    return;
+                }
+
                 ConsumePotion(potionId);
                 HandleInterrupt(type, casterId);
                 return;
