@@ -70,10 +70,28 @@ namespace WhoCastThat.Interactions
               $"seat={game.LocalSeatIndex} authority={game.HasAuthority} " +
               $"currentSeat={game.CurrentSeatIndex}");
 
-            // Let the deal and the rack animations settle before reading anything.
+            // Wait for a SEAT and for potions to exist, not just for a fixed delay. A flat
+            // 3 s wait let one client report "0 potions checked, 0 leaked" — a pass that had
+            // examined nothing, which is worse than a failure because it looks like evidence.
+            float seated = Time.time + 30f;
+            while (Time.time < seated &&
+                   (game.LocalSeatIndex < 0 ||
+                    Object.FindObjectsByType<NetworkedPotion>(FindObjectsSortMode.None).Length == 0))
+            {
+                yield return null;
+            }
+
+            // Then let the deal finish arriving before judging what is on the table.
             yield return new WaitForSeconds(3f);
 
-            ReportHandAndConcealment(game);
+            if (game.LocalSeatIndex < 0)
+            {
+                L("CONCEALMENT SKIPPED: never got a seat, so there is nothing to check.");
+            }
+            else
+            {
+                ReportHandAndConcealment(game);
+            }
             StartCoroutine(WatchInterruptWindow(game));
 
             int casts = 0;
@@ -156,9 +174,11 @@ namespace WhoCastThat.Interactions
             }
         }
 
-        // Concealment check: every potion that is NOT ours must have resolved to the concealed
-        // name locally. The GameObject name is the thing a curious player would read out of the
-        // hierarchy, so it is the honest thing to assert on.
+        // Concealment check. This asserts on the RENDERED COLOUR, not just the GameObject name.
+        // An earlier version checked only the name and reported a clean pass while every
+        // opponent potion was still painted its true colour on screen: NetworkedPotion tints
+        // the liquid and then PotionAura repaints the same renderer from the type profile. The
+        // name is checked too, but the colour is what a player actually reads across the table.
         private void ReportHandAndConcealment(NetworkedSpellGame game)
         {
             NetworkedPotion[] potions =
@@ -184,16 +204,47 @@ namespace WhoCastThat.Interactions
                 else
                 {
                     others++;
-                    if (!p.name.Contains("concealed"))
+                    Color shown = LiquidColour(p);
+                    bool nameOk = p.name.Contains("concealed");
+                    bool colourOk = Close(shown, NetworkedPotion.ConcealedColour);
+
+                    if (!nameOk || !colourOk)
                     {
                         leaked++;
-                        L($"  LEAK: potion seat={p.OwnerSeat} rendered as '{p.name}'");
+                        L($"  LEAK: seat={p.OwnerSeat} name='{p.name}' nameOk={nameOk} " +
+                          $"colourOk={colourOk} shown={shown} " +
+                          $"typeColour={NetworkedPotion.ColorFor(p.Type)}");
                     }
                 }
             }
 
             L($"CONCEALMENT seat={game.LocalSeatIndex} myPotions={mine} otherPotions={others} leaked={leaked}");
             L($"MY HAND: {hand}");
+        }
+
+        // The liquid renderer is private on NetworkedPotion, so find it the same way
+        // ForesightDisplay does — by name convention on the visual child.
+        private static Color LiquidColour(NetworkedPotion potion)
+        {
+            foreach (Renderer r in potion.GetComponentsInChildren<Renderer>(true))
+            {
+                if (!r.gameObject.name.ToLower().Contains("liquid"))
+                {
+                    continue;
+                }
+
+                var block = new MaterialPropertyBlock();
+                r.GetPropertyBlock(block);
+                return block.GetColor(Shader.PropertyToID("_TopColour"));
+            }
+            return Color.clear;
+        }
+
+        private static bool Close(Color a, Color b)
+        {
+            return Mathf.Abs(a.r - b.r) < 0.02f
+                   && Mathf.Abs(a.g - b.g) < 0.02f
+                   && Mathf.Abs(a.b - b.b) < 0.02f;
         }
 
         private static bool HoldsLocally(NetworkedSpellGame game, PotionType type)

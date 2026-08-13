@@ -304,7 +304,13 @@ namespace WhoCastThat.Interactions
             glowRenderer = renderer;
         }
 
-        private bool BelongsToLocalPlayer()
+        /// <summary>
+        /// True when this potion sits in the LOCAL player's rack. Every concealment decision
+        /// hangs off this: the liquid tint, the GameObject name, and the aura profile the VFX
+        /// binder picks. Public because concealment cannot be decided here alone — the aura
+        /// paints the same renderer afterwards.
+        /// </summary>
+        public bool BelongsToLocalPlayer()
         {
             NetworkedSpellGame game = NetworkedSpellGame.Instance;
             if (game == null)

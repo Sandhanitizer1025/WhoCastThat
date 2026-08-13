@@ -62,9 +62,45 @@ public class PotionAuraBinder : MonoBehaviour
         if (potion != null) potion.TypeApplied -= Apply;
     }
 
+    // One shared profile standing in for every potion that is not ours. Built in code rather
+    // than authored as a tenth asset: there is nothing to wire onto the prefab, and no asset
+    // sitting in the library for someone to accidentally hand a real type.
+    //
+    // pulseSpeed and pulseDepth are zeroed deliberately. Motion is a type cue in this system
+    // by design - PotionVFXProfile's own header says motion reads faster than hue in a headset
+    // - so a concealed potion that still breathed at its type's rate would leak through the
+    // animation what the colour no longer leaks.
+    static PotionVFXProfile concealed;
+
+    static PotionVFXProfile Concealed()
+    {
+        if (concealed != null) return concealed;
+
+        concealed = ScriptableObject.CreateInstance<PotionVFXProfile>();
+        concealed.name = "VFX_Concealed";
+        concealed.primary = NetworkedPotion.ConcealedColour;
+        concealed.secondary = Color.black; // auto-derives the darker side colour
+        concealed.lightIntensity = 0.25f;
+        concealed.pulseSpeed = 0f;
+        concealed.pulseDepth = 0f;
+        concealed.hideFlags = HideFlags.HideAndDontSave;
+        return concealed;
+    }
+
     void Apply(PotionType type)
     {
         if (library == null || aura == null) return;
+
+        // Concealment has to be decided HERE as well as in NetworkedPotion.ApplyVisual.
+        // That method tints the liquid and then raises TypeApplied, which lands in this
+        // handler - and PotionAura writes the very same liquid renderer, plus the outline
+        // that is the strongest type cue on the table. Deciding it only there meant the
+        // aura repainted the secret straight back over the concealed tint.
+        if (potion != null && !potion.BelongsToLocalPlayer())
+        {
+            aura.ApplyProfile(Concealed());
+            return;
+        }
 
         PotionVFXProfile profile = library.Get(type);
         if (profile != null) aura.ApplyProfile(profile);
