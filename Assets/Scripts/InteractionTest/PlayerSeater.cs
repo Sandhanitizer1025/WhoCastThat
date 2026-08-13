@@ -5,12 +5,15 @@ using UnityEngine;
 namespace WhoCastThat.Interactions
 {
     /// <summary>
-    /// Moves the local player's XR rig to a seat around the table once connected, so
+    /// Moves the local player's XR rig to a seat around the table when the MATCH STARTS, so
     /// players are separated (and can actually see each other) instead of overlapping
     /// at the VR template's default spawn point far from the table.
     ///
     /// Seat is chosen from the player's turn-order index, so each connected player
     /// takes a different chair.
+    ///
+    /// Deliberately gated on the match rather than the connection: before the game begins the
+    /// player should be able to walk around the room from the scene's spawn point.
     /// </summary>
     public class PlayerSeater : MonoBehaviour
     {
@@ -34,6 +37,16 @@ namespace WhoCastThat.Interactions
 
             NetworkedSpellGame game = NetworkedSpellGame.Instance;
             if (game == null)
+            {
+                return;
+            }
+
+            // Wait for the MATCH, not just the connection. Seating on connect dropped the
+            // player into their chair the instant they joined — so the whole wait for a second
+            // player was spent standing inside the chair mesh, which reads as floating and
+            // fights the character controller. Until the match starts the player is free to
+            // walk the room from wherever the scene spawned them.
+            if (!game.GameActive)
             {
                 return;
             }
