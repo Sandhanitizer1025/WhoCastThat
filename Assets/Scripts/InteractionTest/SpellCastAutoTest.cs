@@ -21,8 +21,19 @@ namespace WhoCastThat.Interactions
     /// </summary>
     public class SpellCastAutoTest : MonoBehaviour
     {
-        /// <summary>Shared by the main editor and every MPPM clone, which is what we want here.</summary>
-        public const string EnabledKey = "WCT.SpellCastAutoTest";
+        /// <summary>
+        /// A SENTINEL FILE, not an EditorPrefs key. EditorPrefs turned out to be an unreliable
+        /// off-switch here: clearing it in the main editor did not reliably stop the MPPM clone,
+        /// so the other player kept casting on its own during a manual playtest with no way to
+        /// see why. A file in the project root is unambiguous — both processes open the same
+        /// folder, and you can confirm the state with `ls`. No file means off, always.
+        /// </summary>
+        public static string SentinelPath =>
+            System.IO.Path.Combine(
+                System.IO.Directory.GetParent(Application.dataPath).FullName,
+                "wct_autotest.on");
+
+        public static bool IsEnabled => System.IO.File.Exists(SentinelPath);
 
         private const int MaxCasts = 6;
 
@@ -34,26 +45,39 @@ namespace WhoCastThat.Interactions
         [UnityEditor.MenuItem(MenuPath)]
         private static void Toggle()
         {
-            bool on = !UnityEditor.EditorPrefs.GetBool(EnabledKey, false);
-            UnityEditor.EditorPrefs.SetBool(EnabledKey, on);
-            Debug.Log($"[AutoTest] scripted spell casting is now {(on ? "ON" : "OFF")}. " +
+            if (IsEnabled)
+            {
+                System.IO.File.Delete(SentinelPath);
+            }
+            else
+            {
+                System.IO.File.WriteAllText(SentinelPath,
+                    "Delete this file to stop the scripted spell test driving every client.\n");
+            }
+
+            Debug.Log($"[AutoTest] scripted spell casting is now {(IsEnabled ? "ON" : "OFF")}. " +
                       "It drives every client, the MPPM clone included.");
         }
 
         [UnityEditor.MenuItem(MenuPath, isValidateFunction: true)]
         private static bool ToggleValidate()
         {
-            UnityEditor.Menu.SetChecked(MenuPath, UnityEditor.EditorPrefs.GetBool(EnabledKey, false));
+            UnityEditor.Menu.SetChecked(MenuPath, IsEnabled);
             return !Application.isPlaying;
         }
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void Install()
         {
-            if (!UnityEditor.EditorPrefs.GetBool(EnabledKey, false))
+            if (!IsEnabled)
             {
                 return;
             }
+
+            // Loud on purpose. Silently taking over both players is exactly how this went
+            // unnoticed before.
+            Debug.LogWarning("[AutoTest] SCRIPTED SPELL TEST IS ON — this client will play " +
+                             "itself. Delete wct_autotest.on in the project root to stop it.");
 
             var go = new GameObject("SpellCastAutoTest");
             DontDestroyOnLoad(go);

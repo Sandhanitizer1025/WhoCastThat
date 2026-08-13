@@ -70,7 +70,7 @@ namespace WhoCastThat.Interactions
             candidates = ids;
             onPicked = picked;
             Prompt = string.IsNullOrEmpty(prompt)
-                ? "LOOK at a mage and PRESS THE TRIGGER to take their potion"
+                ? "POINT at a mage and PRESS THE TRIGGER to take their potion"
                 : prompt;
 
             Vector3 forward = view.transform.forward;
@@ -140,11 +140,20 @@ namespace WhoCastThat.Interactions
             }
         }
 
-        // Whichever box the player is looking most directly at wins. Angle rather than a raycast:
-        // the boxes carry no colliders (a collider here would block the XR ray and the grab that
-        // the player needs for everything else), so there is nothing for a ray to hit.
+        // Whichever box the player POINTS most directly at wins. Angle rather than a raycast: the
+        // boxes carry no colliders (one here would block the XR ray and the grab the player needs
+        // for everything else), so there is nothing for a ray to hit.
+        //
+        // The aiming ray is the controller's, not the head's. Gaze selection meant you could not
+        // look at what you were about to pick without also moving the selection, and it fought
+        // the pointing the rest of the game already teaches. The head is only the fallback, for
+        // the editor and for hand tracking, where there is no controller ray to read.
         private void UpdateHighlight(Camera view)
         {
+            Transform aim = AimingTransform();
+            Vector3 origin = aim != null ? aim.position : view.transform.position;
+            Vector3 forward = aim != null ? aim.forward : view.transform.forward;
+
             int best = -1;
             float bestAngle = float.MaxValue;
 
@@ -155,8 +164,8 @@ namespace WhoCastThat.Interactions
                     continue;
                 }
 
-                Vector3 toBox = anchors[i].transform.position - view.transform.position;
-                float angle = Vector3.Angle(view.transform.forward, toBox);
+                Vector3 toBox = anchors[i].transform.position - origin;
+                float angle = Vector3.Angle(forward, toBox);
                 if (angle < bestAngle)
                 {
                     bestAngle = angle;
@@ -164,9 +173,9 @@ namespace WhoCastThat.Interactions
                 }
             }
 
-            // A generous cone, so looking vaguely at a box counts, but not so wide that looking
-            // away entirely still leaves something armed.
-            if (bestAngle > 35f)
+            // A tighter cone than gaze used, because pointing is far more precise than looking
+            // and the boxes sit only ~18 degrees apart from arm's length.
+            if (bestAngle > (aim != null ? 20f : 35f))
             {
                 best = -1;
             }
@@ -186,15 +195,74 @@ namespace WhoCastThat.Interactions
             }
         }
 
+        /// <summary>
+        /// The controller the player is aiming with, or null to fall back to the head.
+        ///
+        /// Prefers a ray interactor's own ray origin, which is the visible pointer the player is
+        /// lining up — the interactor's transform can sit at the wrist and points somewhere
+        /// slightly different. A hand already holding something is skipped, so a potion in one
+        /// hand does not steal the aim from the empty one.
+        /// </summary>
+        private Transform AimingTransform()
+        {
+            RefreshInteractors();
+
+            Transform fallback = null;
+
+            for (int i = 0; i < localInteractors.Length; i++)
+            {
+                XRBaseInputInteractor interactor = localInteractors[i];
+                if (interactor == null || !interactor.isActiveAndEnabled || interactor.hasSelection)
+                {
+                    continue;
+                }
+
+                if (interactor is XRRayInteractor ray)
+                {
+                    Transform origin = ray.rayOriginTransform != null
+                        ? ray.rayOriginTransform
+                        : ray.transform;
+
+                    // A tracked controller ray wins outright; anything else is only a fallback.
+                    if (ray.isActiveAndEnabled)
+                    {
+                        return origin;
+                    }
+                }
+
+                fallback ??= interactor.transform;
+            }
+
+            return fallback;
+        }
+
+        private void RefreshInteractors()
+        {
+            // Re-found when the cached set has gone stale: interactors are enabled and disabled
+            // as the player switches between controllers and hand tracking, and a destroyed one
+            // left in this array would silently stop the picker aiming at all.
+            if (localInteractors == null || localInteractors.Length == 0)
+            {
+                localInteractors = FindObjectsByType<XRBaseInputInteractor>(FindObjectsSortMode.None);
+                return;
+            }
+
+            for (int i = 0; i < localInteractors.Length; i++)
+            {
+                if (localInteractors[i] == null)
+                {
+                    localInteractors = FindObjectsByType<XRBaseInputInteractor>(FindObjectsSortMode.None);
+                    return;
+                }
+            }
+        }
+
         // Same approach as StirZone's draw prompt: read the activate (trigger) action off the
         // local interactors. Interactors with a selection are skipped, so this cannot fire from
         // the hand that is still holding something.
         private bool TriggerPressedThisFrame()
         {
-            if (localInteractors == null || localInteractors.Length == 0)
-            {
-                localInteractors = FindObjectsByType<XRBaseInputInteractor>(FindObjectsSortMode.None);
-            }
+            RefreshInteractors();
 
             for (int i = 0; i < localInteractors.Length; i++)
             {

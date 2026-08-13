@@ -2824,7 +2824,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!65 &194959431
 BoxCollider:
   m_ObjectHideFlags: 0
@@ -5720,6 +5720,7 @@ GameObject:
   - component: {fileID: 390843205}
   - component: {fileID: 390843204}
   - component: {fileID: 390843203}
+  - component: {fileID: 390843206}
   m_Layer: 0
   m_Name: rtchair (3)
   m_TagString: Untagged
@@ -5795,6 +5796,28 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!64 &390843206
+MeshCollider:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 390843202}
+  m_Material: {fileID: 0}
+  m_IncludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_ExcludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_LayerOverridePriority: 0
+  m_IsTrigger: 0
+  m_ProvidesContacts: 0
+  m_Enabled: 1
+  serializedVersion: 5
+  m_Convex: 0
+  m_CookingOptions: 30
+  m_Mesh: {fileID: 277674900307529130, guid: 43a10d548bdb8b949ab8d020191d8360, type: 3}
 --- !u!1 &393816584
 GameObject:
   m_ObjectHideFlags: 0
@@ -10896,6 +10919,125 @@ MeshFilter:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 600947951}
   m_Mesh: {fileID: -3931615388447386359, guid: 387bb26c956044d4b9edba805eb0e79f, type: 3}
+--- !u!1001 &605992011
+PrefabInstance:
+  m_ObjectHideFlags: 0
+  serializedVersion: 2
+  m_Modification:
+    serializedVersion: 3
+    m_TransformParent: {fileID: 0}
+    m_Modifications:
+    - target: {fileID: -8679921383154817045, guid: eb08b0b79c373964f8a211cda3819534,
+        type: 3}
+      propertyPath: m_LocalScale.x
+      value: 161.0553
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: eb08b0b79c373964f8a211cda3819534,
+        type: 3}
+      propertyPath: m_LocalScale.y
+      value: 159.41602
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: eb08b0b79c373964f8a211cda3819534,
+        type: 3}
+      propertyPath: m_LocalScale.z
+      value: 120.143135
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: eb08b0b79c373964f8a211cda3819534,
+        type: 3}
+      propertyPath: m_LocalPosition.x
+      value: -6.205
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: eb08b0b79c373964f8a211cda3819534,
+        type: 3}
+      propertyPath: m_LocalPosition.y
+      value: -1.2145582
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: eb08b0b79c373964f8a211cda3819534,
+        type: 3}
+      propertyPath: m_LocalPosition.z
+      value: -13.242
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: eb08b0b79c373964f8a211cda3819534,
+        type: 3}
+      propertyPath: m_LocalRotation.w
+      value: 0.7071067
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: eb08b0b79c373964f8a211cda3819534,
+        type: 3}
+      propertyPath: m_LocalRotation.x
+      value: -0.7071069
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: eb08b0b79c373964f8a211cda3819534,
+        type: 3}
+      propertyPath: m_LocalRotation.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: eb08b0b79c373964f8a211cda3819534,
+        type: 3}
+      propertyPath: m_LocalRotation.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: eb08b0b79c373964f8a211cda3819534,
+        type: 3}
+      propertyPath: m_LocalEulerAnglesHint.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: eb08b0b79c373964f8a211cda3819534,
+        type: 3}
+      propertyPath: m_LocalEulerAnglesHint.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: eb08b0b79c373964f8a211cda3819534,
+        type: 3}
+      propertyPath: m_LocalEulerAnglesHint.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: -7511558181221131132, guid: eb08b0b79c373964f8a211cda3819534,
+        type: 3}
+      propertyPath: 'm_Materials.Array.data[0]'
+      value: 
+      objectReference: {fileID: 2100000, guid: 33cd8e2f904fff64292640e4a86943d5, type: 2}
+    - target: {fileID: 919132149155446097, guid: eb08b0b79c373964f8a211cda3819534,
+        type: 3}
+      propertyPath: m_Name
+      value: tabel
+      objectReference: {fileID: 0}
+    m_RemovedComponents: []
+    m_RemovedGameObjects: []
+    m_AddedGameObjects: []
+    m_AddedComponents:
+    - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: eb08b0b79c373964f8a211cda3819534,
+        type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 605992013}
+  m_SourcePrefab: {fileID: 100100000, guid: eb08b0b79c373964f8a211cda3819534, type: 3}
+--- !u!1 &605992012 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 919132149155446097, guid: eb08b0b79c373964f8a211cda3819534,
+    type: 3}
+  m_PrefabInstance: {fileID: 605992011}
+  m_PrefabAsset: {fileID: 0}
+--- !u!65 &605992013
+BoxCollider:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 605992012}
+  m_Material: {fileID: 0}
+  m_IncludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_ExcludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_LayerOverridePriority: 0
+  m_IsTrigger: 0
+  m_ProvidesContacts: 0
+  m_Enabled: 1
+  serializedVersion: 3
+  m_Size: {x: 0.013659962, y: 0.013800435, z: 0.007657496}
+  m_Center: {x: 0, y: -0.0000000011216812, z: 0.003845096}
 --- !u!1 &608429249
 GameObject:
   m_ObjectHideFlags: 0
@@ -20086,6 +20228,7 @@ GameObject:
   - component: {fileID: 815059296}
   - component: {fileID: 815059295}
   - component: {fileID: 815059294}
+  - component: {fileID: 815059297}
   m_Layer: 0
   m_Name: rtchair (2)
   m_TagString: Untagged
@@ -20161,6 +20304,28 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 270, z: 0}
+--- !u!64 &815059297
+MeshCollider:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 815059293}
+  m_Material: {fileID: 0}
+  m_IncludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_ExcludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_LayerOverridePriority: 0
+  m_IsTrigger: 0
+  m_ProvidesContacts: 0
+  m_Enabled: 1
+  serializedVersion: 5
+  m_Convex: 0
+  m_CookingOptions: 30
+  m_Mesh: {fileID: 277674900307529130, guid: 43a10d548bdb8b949ab8d020191d8360, type: 3}
 --- !u!1 &824407383
 GameObject:
   m_ObjectHideFlags: 0
@@ -23879,6 +24044,7 @@ GameObject:
   - component: {fileID: 1075118509}
   - component: {fileID: 1075118508}
   - component: {fileID: 1075118507}
+  - component: {fileID: 1075118510}
   m_Layer: 0
   m_Name: rtchair
   m_TagString: Untagged
@@ -23954,6 +24120,28 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!64 &1075118510
+MeshCollider:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1075118506}
+  m_Material: {fileID: 0}
+  m_IncludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_ExcludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_LayerOverridePriority: 0
+  m_IsTrigger: 0
+  m_ProvidesContacts: 0
+  m_Enabled: 1
+  serializedVersion: 5
+  m_Convex: 0
+  m_CookingOptions: 30
+  m_Mesh: {fileID: 277674900307529130, guid: 43a10d548bdb8b949ab8d020191d8360, type: 3}
 --- !u!1 &1086706541
 GameObject:
   m_ObjectHideFlags: 0
@@ -41239,17 +41427,17 @@ PrefabInstance:
     - target: {fileID: 7174019212652907432, guid: 77ac6b10722bcca4a8baf70e44d89e78,
         type: 3}
       propertyPath: m_LocalPosition.x
-      value: 0
+      value: -7.3
       objectReference: {fileID: 0}
     - target: {fileID: 7174019212652907432, guid: 77ac6b10722bcca4a8baf70e44d89e78,
         type: 3}
       propertyPath: m_LocalPosition.y
-      value: 0
+      value: -1.3267788
       objectReference: {fileID: 0}
     - target: {fileID: 7174019212652907432, guid: 77ac6b10722bcca4a8baf70e44d89e78,
         type: 3}
       propertyPath: m_LocalPosition.z
-      value: 0
+      value: -14.3
       objectReference: {fileID: 0}
     - target: {fileID: 7174019212652907432, guid: 77ac6b10722bcca4a8baf70e44d89e78,
         type: 3}
@@ -41520,6 +41708,11 @@ PrefabInstance:
         type: 3}
       propertyPath: m_SizeDelta.y
       value: 46
+      objectReference: {fileID: 0}
+    - target: {fileID: 9041419914630742446, guid: 77ac6b10722bcca4a8baf70e44d89e78,
+        type: 3}
+      propertyPath: m_UseGravity
+      value: 1
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
@@ -42571,6 +42764,7 @@ GameObject:
   - component: {fileID: 1785440900}
   - component: {fileID: 1785440899}
   - component: {fileID: 1785440898}
+  - component: {fileID: 1785440901}
   m_Layer: 0
   m_Name: rtchair (1)
   m_TagString: Untagged
@@ -42646,6 +42840,28 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 90, z: 0}
+--- !u!64 &1785440901
+MeshCollider:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1785440897}
+  m_Material: {fileID: 0}
+  m_IncludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_ExcludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_LayerOverridePriority: 0
+  m_IsTrigger: 0
+  m_ProvidesContacts: 0
+  m_Enabled: 1
+  serializedVersion: 5
+  m_Convex: 0
+  m_CookingOptions: 30
+  m_Mesh: {fileID: 277674900307529130, guid: 43a10d548bdb8b949ab8d020191d8360, type: 3}
 --- !u!1 &1792888187
 GameObject:
   m_ObjectHideFlags: 0
@@ -49981,3 +50197,4 @@ SceneRoots:
   - {fileID: 1321912163}
   - {fileID: 225913521}
   - {fileID: 1256095825}
+  - {fileID: 605992011}

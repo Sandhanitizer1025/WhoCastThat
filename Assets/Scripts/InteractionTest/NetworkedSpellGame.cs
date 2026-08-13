@@ -2297,7 +2297,7 @@ namespace WhoCastThat.Interactions
             };
 
             choicePicker.Show(ids, names, id => ChooseCursePlacement((int)id),
-                "LOOK at a slot and PRESS THE TRIGGER to hide the Curse");
+                "POINT at a slot and PRESS THE TRIGGER to hide the Curse");
         }
 
         private void BeginCursePlacement(ulong playerId)

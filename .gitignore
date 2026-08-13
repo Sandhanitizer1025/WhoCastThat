@@ -106,3 +106,6 @@ InitTestScene*.unity*
 
 # Auto-generated scenes by play mode tests
 /[Aa]ssets/[Ii]nit[Tt]est[Ss]cene*.unity*
+
+# Local switch for the scripted MPPM spell test (SpellCastAutoTest).
+wct_autotest.on
