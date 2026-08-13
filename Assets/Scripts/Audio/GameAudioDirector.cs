@@ -31,6 +31,13 @@ namespace WhoCastThat.Audio
 
         private static GameAudioDirector instance;
 
+        /// <summary>
+        /// Raised when the Boot -> Lobby sting starts, carrying its length in seconds. The loading
+        /// screen holds for exactly this long, so the two are driven by one clip rather than by a
+        /// duration written down in two places that can drift apart.
+        /// </summary>
+        public static event System.Action<float> TransitionStingerStarted;
+
         private GameAudioLibrary library;
         private AudioSource music;
         private AudioSource sfx;
@@ -137,6 +144,11 @@ namespace WhoCastThat.Audio
             if (sceneName == LobbySceneName && previousScene == BootSceneName)
             {
                 PlaySting(library.SceneTransitionSfx);
+
+                // Raised even when the clip is missing, with 0 — the loading screen then knows to
+                // use its own fallback rather than hanging on a stinger that never arrives.
+                float length = library.SceneTransitionSfx != null ? library.SceneTransitionSfx.length : 0f;
+                TransitionStingerStarted?.Invoke(length);
             }
 
             previousScene = sceneName;
