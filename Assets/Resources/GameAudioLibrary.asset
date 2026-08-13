@@ -1,0 +1,27 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 425b028b28d2e894694fc31dfa1c1110, type: 3}
+  m_Name: GameAudioLibrary
+  m_EditorClassIdentifier: 
+  sceneTracks:
+  - sceneName: LobbyMirrorScene
+    clip: {fileID: 8300000, guid: c2db6a54afad5264b9d9708cdb47d5f7, type: 3}
+    trim: 0.85
+  - sceneName: InteractionTestScene
+    clip: {fileID: 8300000, guid: 00abef3ec76a5064cae29fd8c780e851, type: 3}
+    trim: 0.85
+  - sceneName: TutorialScene
+    clip: {fileID: 8300000, guid: 388dd2b10b68ff24894f0c65454efa95, type: 3}
+    trim: 0.85
+  castSfx: {fileID: 8300000, guid: 685e6f061c2422c479e19fb0131abd92, type: 3}
+  cursedSfx: {fileID: 8300000, guid: c18b92b1e63037f45ac326c64bb56ede, type: 3}
+  sceneTransitionSfx: {fileID: 8300000, guid: aa66cd584d075c64b9e3c1f7ed14de5a, type: 3}

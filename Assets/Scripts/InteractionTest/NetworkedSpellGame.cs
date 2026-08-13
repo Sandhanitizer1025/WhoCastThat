@@ -367,6 +367,13 @@ namespace WhoCastThat.Interactions
             if (cursedPlayers.Add(id))
             {
                 cursedNetwork.Add(id);
+
+                // Guarded on the Add: re-cursing an already-cursed player is not a new event, and
+                // the victim should not hear the sting twice.
+                if (IsSpawned)
+                {
+                    PlayerCursedRpc(id);
+                }
             }
         }
 
@@ -617,6 +624,10 @@ namespace WhoCastThat.Interactions
             if (Instance == this)
             {
                 Instance = null;
+
+                // Only the real instance clears these. A second manager despawning must not strip
+                // the subscribers belonging to the one still running.
+                ClearPresentationSubscribers();
             }
         }
 
@@ -1729,8 +1740,20 @@ namespace WhoCastThat.Interactions
             {
                 LogCast($"{type}: nobody can answer, resolving immediately.");
                 pendingActive = false;
+
+                // Window of 0: this is the "genuinely half the time" case the seam warns about.
+                if (IsSpawned)
+                {
+                    SpellCastStartedRpc((int)type, casterId, 0f);
+                }
+
                 ApplyEffect(type, casterId, targetId);
                 return;
+            }
+
+            if (IsSpawned)
+            {
+                SpellCastStartedRpc((int)type, casterId, Mathf.Max(0.1f, interruptWindowSeconds));
             }
 
             LogCast($"{type}: interrupt window open for {interruptWindowSeconds}s — " +
@@ -1777,6 +1800,12 @@ namespace WhoCastThat.Interactions
                 // A dispelled spell simply fizzles; the caster's turn carries on.
                 LogCast($"{pending.Type} cancelled by Dispel.");
                 SetAnnouncement($"{pending.Type} fizzles out. {PlayerLabel(CurrentTurnClientId)} is still up.");
+
+                if (IsSpawned)
+                {
+                    SpellFizzledRpc((int)pending.Type, pending.Caster);
+                }
+
                 return;
             }
 
@@ -1826,8 +1855,90 @@ namespace WhoCastThat.Interactions
             return false;
         }
 
+        // ---- Presentation seam ------------------------------------------------------------
+        //
+        // Art and audio hang off these rather than reaching into the rules. Every one is raised
+        // through a BROADCAST RPC, because the rules run on the authority alone: ApplyEffect is
+        // never called on the other clients, so raising a plain C# event here would fire on one
+        // machine and be silent on every other.
+        //
+        // Static so a listener can subscribe in Awake without hunting for a singleton that does
+        // not exist yet when a scene's audio component wakes up. Static subscriptions surviving a
+        // scene load are exactly the leak StaleSubscriptionScrubber exists to mop up, so this
+        // class drops its own in OnNetworkDespawn rather than leaving them to rot.
+
+        /// <summary>
+        /// A spell is on the table. <paramref name="windowSeconds"/> is how long players have to
+        /// answer it — and it is genuinely <c>0</c> whenever nobody else holds a Dispel, which is
+        /// most of the time in a two-player match. Anything driving a build-up off this must treat
+        /// 0 as "resolves immediately" rather than assuming it has time to play.
+        /// </summary>
+        public static event Action<PotionType, ulong, float> SpellCastStarted;
+
+        /// <summary>A spell took effect. Also fires for the copy a Reflection makes.</summary>
+        public static event Action<PotionType, ulong, ulong> SpellResolved;
+
+        /// <summary>A spell was dispelled and never took effect.</summary>
+        public static event Action<PotionType, ulong> SpellFizzled;
+
+        /// <summary>A player has just been cursed.</summary>
+        public static event Action<ulong> PlayerCursed;
+
+        /// <summary>A player is out of the match.</summary>
+        public static event Action<ulong> PlayerEliminated;
+
+        /// <summary>
+        /// Drops every presentation subscriber. Called from OnNetworkDespawn: these are static, so
+        /// without this a listener from a finished match stays wired to a destroyed object and the
+        /// next match raises events into it.
+        /// </summary>
+        private static void ClearPresentationSubscribers()
+        {
+            SpellCastStarted = null;
+            SpellResolved = null;
+            SpellFizzled = null;
+            PlayerCursed = null;
+            PlayerEliminated = null;
+        }
+
+        [Rpc(SendTo.Everyone)]
+        private void SpellCastStartedRpc(int type, ulong casterId, float windowSeconds)
+        {
+            SpellCastStarted?.Invoke((PotionType)type, casterId, windowSeconds);
+        }
+
+        [Rpc(SendTo.Everyone)]
+        private void SpellResolvedRpc(int type, ulong casterId, ulong targetId)
+        {
+            SpellResolved?.Invoke((PotionType)type, casterId, targetId);
+        }
+
+        [Rpc(SendTo.Everyone)]
+        private void SpellFizzledRpc(int type, ulong casterId)
+        {
+            SpellFizzled?.Invoke((PotionType)type, casterId);
+        }
+
+        [Rpc(SendTo.Everyone)]
+        private void PlayerCursedRpc(ulong playerId)
+        {
+            PlayerCursed?.Invoke(playerId);
+        }
+
+        [Rpc(SendTo.Everyone)]
+        private void PlayerEliminatedRpc(ulong playerId)
+        {
+            PlayerEliminated?.Invoke(playerId);
+        }
+
         private void ApplyEffect(PotionType type, ulong casterId, ulong targetId)
         {
+            // Before the effect, so a listener sees the resolution in the same order the rules do.
+            if (IsSpawned)
+            {
+                SpellResolvedRpc((int)type, casterId, targetId);
+            }
+
             bool endsTurn = type == PotionType.Hex || type == PotionType.Phase;
             LogCast($"RESOLVE {type} by {PlayerLabel(casterId)} on {PlayerLabel(targetId)} — " +
                     (endsTurn
@@ -2572,6 +2683,11 @@ namespace WhoCastThat.Interactions
         {
             RemoveCurse(playerId);
             eliminated.Add(playerId);
+
+            if (IsSpawned)
+            {
+                PlayerEliminatedRpc(playerId);
+            }
 
             // Their potions leave the table with them.
             ClearSeatPotions(GetSeatIndex(playerId));
