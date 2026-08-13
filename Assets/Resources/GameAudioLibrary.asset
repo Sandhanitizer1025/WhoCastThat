@@ -20,7 +20,7 @@ MonoBehaviour:
     clip: {fileID: 8300000, guid: 00abef3ec76a5064cae29fd8c780e851, type: 3}
     trim: 0.85
   - sceneName: TutorialScene
-    clip: {fileID: 8300000, guid: 388dd2b10b68ff24894f0c65454efa95, type: 3}
+    clip: {fileID: 0}
     trim: 0.85
   castSfx: {fileID: 8300000, guid: 685e6f061c2422c479e19fb0131abd92, type: 3}
   spellStings:

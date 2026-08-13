@@ -37,6 +37,10 @@ In priority order:
   either `InteractionTestScene` or `TutorialScene`.
 - Event map: `SpellCastStarted` → the five cast spells; `SpellFizzled` → the `dispel (x)` lines;
   `SpellResolved` → the `reflection (x)` lines; `PlayerCursed` → the Curse line (victim only).
+- **`TutorialScene` is deliberately silent.** Its `sceneTracks` entry is kept with an **empty clip**
+  — that is how the library authors "this scene has no music" (see `TryGetTrack`). It is not a
+  missing reference: the narration carries the tutorial, and a bed under it fought the voice.
+  `tutorial_music.mp3` is still in the project if it is ever wanted back.
 
 ### The mirror menu fits the mirror, with every button back
 - **Fitted by measurement.** `BuildMenu()` reads the mirror's renderer bounds and derives one
