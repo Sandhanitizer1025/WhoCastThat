@@ -1,224 +1,247 @@
-# Handoff — mirror menu, VR UI input, and the lobby flow
+# Handoff — voiceovers wired, mirror menu fitted, hat seated
 
 _Unity 6 (6000.0.74f1) URP VR multiplayer card game "Who Cast That?!" — Netcode for GameObjects._
-_Read `C:\Users\zelda\Downloads\FOR_ZELDA.md` alongside this — it is Raphael's handoff and defines
-the team rules referenced throughout._
+_Read `C:\Users\zelda\Downloads\FOR_ZELDA.md` too — Raphael's handoff, defines the team rules below._
 
-Last updated: 2026-08-12. Supersedes the previous version of this file.
-
----
-
-## 1. SOLVED — VR controllers could not press the magic-mirror buttons
-
-This was the headline bug and it is fixed. The cause was **not** in the menu, and **not** a
-simulator-vs-device difference.
-
-**Root cause:** `LobbyMirrorScene`'s `EventSystem` carried **`InputSystemUIInputModule`**. XR
-interactors only ever drive UI through **`XRUIInputModule`**.
-
-The failure chain, verified in Play mode:
-
-1. Each interactor's `RegisteredUIInteractorCache.FindOrCreateXRUIInputModule()` finds no
-   `XRUIInputModule` and **adds one at runtime**.
-2. That code only knows to remove the older `StandaloneInputModule`, so it never notices
-   `InputSystemUIInputModule` and both modules end up on the same EventSystem.
-3. The EventSystem activates the module that was already there. `XRUIInputModule` is never
-   `currentInputModule`, so its `Process()` never runs.
-4. `TrackedDeviceEventData` does `currentInputModule as XRUIInputModule`, which is null — every
-   tracked-device press is dropped. Rays still hover, clicks do nothing.
-
-**Why the other scenes were fine:**
-
-| Scene | Module in scene | Result |
-|---|---|---|
-| `BootScene` | `XRUIInputModule` | correct module authored in the scene |
-| `InteractionTestScene` | *no EventSystem at all* | XRI creates a clean one — nothing to compete |
-| `LobbyMirrorScene` | `InputSystemUIInputModule` | broken |
-| `zelda.unity` | `InputSystemUIInputModule` | broken |
-
-`LobbyMirrorScene` is a `CopyAsset` clone of `zelda.unity`, so it **inherited** the broken
-EventSystem. Having no EventSystem is better than having the wrong one.
-
-**The fix:** `Assets/Scripts/XRUIInputModuleGuard.cs`. Runs on every scene load; when it finds an
-EventSystem carrying `InputSystemUIInputModule` it ensures `XRUIInputModule` exists and disables the
-screen-space one. Disabled rather than destroyed, because `XRUIInputModule` handles mouse and touch
-itself — the simulator keeps working.
-
-It is a runtime component in Zelda's own file precisely so **no teammate's scene has to be
-hand-edited** (team rule §5.1). If Raphael later swaps the component on the EventSystem directly,
-the guard becomes a no-op automatically — it only acts when the screen module is present and enabled.
-
-**Verified, not assumed.** Before: `currentInputModule = InputSystemUIInputModule`. After:
-`XRUIInputModule`, with the screen module disabled. Both **left and right** controllers were aimed
-at the Play button, produced a live UI raycast at 1.05 m, and fired `onClick` end-to-end through
-their `uiPressInput` readers.
-
-**Both hands were already wired correctly** — `m_EnableUIInteraction = True` on both
-`NearFarInteractor`s, and both UI Press bindings present (`XRI Left/Right Interaction/UI Press`).
-The input module was the single point of failure for both.
-
-> Tell Raphael: his device test of PR #30 cannot pass. That fix targeted the wrong cause — the
-> failure is deterministic and fails identically on a Quest.
+Last updated: 2026-08-14. Branch `zelda22`, merged with `main`'s lighting bake. Supersedes the
+previous version of this file.
 
 ---
 
-## 2. Mirror menu — current button wiring
+## 1. The goal (our next step)
 
-All menu work lives in `MagicMirrorMenu.BuildMenu()` and is reproduced with
-**`WhoCastThat → Build Mirror Menu`** (FOR_ZELDA §0b). Never hand-place menu objects in a scene.
+**The tutorial plays end to end, the wizard narration is wired, and the mirror menu has its full
+button set inside the glass. Everything below now needs a headset, not more code.**
 
-| Button | Goes to |
+In priority order:
+
+1. **Play test on device.** Nothing in §2 has been heard or seen in a headset — the voice lines,
+   the hat fit, the menu layout and the lighting bake were all judged on a monitor.
+2. **Add a Counterspell event to `NetworkedSpellGame`** so a rival's Counterspell can be narrated,
+   not just the local player's. Two lines in a **shared file** — Raphael and Ye Kai's call. See §5.
+3. **Tutorial cleanup** — remove `DiagnosticLoop()` from `TutorialDriver`, record voice slot 11.
+4. **Decide the Gabriola font question** before any Android build. See §5.
+
+---
+
+## 2. What works now
+
+### The wizard speaks
+18 of the 19 recordings in `Assets/Audio/wizard recs/` are wired and play off the rules.
+
+- **`SpellVoiceLibrary.cs` / `SpellVoiceDirector.cs`** (new) — a narration layer that is
+  **separate from `GameAudioLibrary`** on purpose. `spellStings` plays a clip *instead of* the
+  generic cast sting, so narration in there would silence `cast_sfx` and drop the project's only
+  reference to `foresight_sfx`. `GameAudioLibrary.asset` is untouched.
+- The director installs itself from a runtime hook, like `GameAudioDirector` — no scene wiring in
+  either `InteractionTestScene` or `TutorialScene`.
+- Event map: `SpellCastStarted` → the five cast spells; `SpellFizzled` → the `dispel (x)` lines;
+  `SpellResolved` → the `reflection (x)` lines; `PlayerCursed` → the Curse line (victim only).
+
+### The mirror menu fits the mirror, with every button back
+- **Fitted by measurement.** `BuildMenu()` reads the mirror's renderer bounds and derives one
+  uniform scale with a 14% frame inset. It was 1.17 m × 2.11 m against a 1.10 m × 1.88 m mirror;
+  it is now 0.90 m × 1.61 m.
+- **No purple backdrop.** The mirror's own glass is the background. Built in four places — main,
+  settings, the runtime settings panel, the customise panel — all changed.
+- **Host and Join are back.** They were never missing functionality: `MirrorMenuRouter` has always
+  had working `OnHost`, `OnJoin` and a full `RoomCodePad`. `BuildMenu` was nulling `hostButton`
+  and `joinButton`, so the router's `Rewire()` hit its null guard and silently did nothing.
+- Rows: Play, Host, Join, How to Play, Settings, Quit, then Customise added at runtime.
+
+### The hat sits on the head
+All five hats share one mesh whose bounds centre is **3.5 mm behind its own pivot** (~3 cm once
+scaled), so it was seated facing backwards off the back of the head.
+- `PlayerHatLibrary.yawDegrees` (new, 180) is read by **both** the worn hat and the lobby preview.
+- `forwardOffset` 0 → 0.02.
+- Two preview-only bugs fixed: `HatMount` never inherited the mannequin's 180° turn, and
+  `FitPreviewHat` silently dropped `ForwardOffset`. The preview now matches what you wear.
+
+### Inherited from `main`
+The lighting bake for all three scenes, `LS_RoomV2_Quest.lighting`, and the `Mirror Glow` light in
+the mirror alcove. **Only `Chandelier Key` and `Fireplace Light` are still Mixed** — demote either
+and every dynamic object (players, hats, potions) goes flat and dark. The light rig lives in
+`RoomV2.prefab`; **edit the prefab, never a scene instance.**
+
+---
+
+## 3. Files actively edited (all `.cs` — merge as text, safe to own)
+
+| File | What |
 |---|---|
-| Play | `InteractionTestScene` |
-| How to Play | `TutorialScene` |
-| Settings | opens the settings panel |
-| Quit | `BootScene` |
+| `Assets/Scripts/Audio/SpellVoiceLibrary.cs` | New. The narration clip table. |
+| `Assets/Scripts/Audio/SpellVoiceDirector.cs` | New. Subscribes to the rules; self-installing. |
+| `Assets/Scripts/MagicMirrorMenu.cs` | Menu + its editor builder. **All menu work goes in `BuildMenu()`**, never hand-placed (FOR_ZELDA §0b). Now also owns the row layout (`RowPosition` / `RowSize` / `BuiltInRowCount`). |
+| `Assets/Scripts/Flow/LobbyCustomisePanel.cs` | Hat preview fixes + no backdrop + asks for its row. |
+| `Assets/Scripts/Flow/LobbySettingsPanel.cs` | No backdrop. |
+| `Assets/Scripts/Visuals/PlayerHat.cs` | Applies `FitRotation` before measuring. |
+| `Assets/Scripts/Visuals/PlayerHatLibrary.cs` | Added `yawDegrees` / `FitRotation`. |
+| `Assets/Scripts/Tutorial/TutorialDriver.cs` | The whole tutorial. **Still contains a temporary `DiagnosticLoop()`** logging `[TUT-DIAG]` every 1.5 s — remove it. |
+| `Assets/Scripts/Tutorial/TutorialHudFollow.cs` | New. Lazy head-follow for the HUD. |
+| `Assets/Scripts/Tutorial/TutorialOfflineHost.cs` | New. Local host, no lobby. |
+| `Assets/Scripts/XRUIInputModuleGuard.cs` | New. Fixes XR UI input in every scene. |
+| `Assets/Scripts/GameAudioSettings.cs` | New. Audio prefs shared with `BootAudioManager`. |
+| `Assets/Scripts/InteractionTest/NetworkedSpellGame.cs` | **SHARED FILE** — only the `allowSoloPlay` flag + guard. Tell Raphael and Ye Kai. |
+| `Assets/Scripts/PotDrawZone.cs` | Added a null guard. Orphaned prototype code otherwise — see §5. |
 
-**Host and Join were removed** from the menu.
-
-> **The public `hostButton` / `joinButton` fields must stay.** `MirrorMenuRouter.cs:48-49` reads
-> them; deleting the fields stops that file compiling for the whole team. They are left unassigned
-> and every use is null-guarded.
-
-Quit loads `BootScene` rather than calling `Application.Quit()` — on a headset, quitting drops the
-player to the system menu and reads as a crash.
-
-### Settings panel
-
-Three sliders — Master, Music, Sound Effects — plus Back, built in `BuildMenu()`.
-Backed by `Assets/Scripts/GameAudioSettings.cs`.
-
-- **Master** drives `AudioListener.volume`, so it is audible immediately in any scene, and is
-  re-applied on launch via `[RuntimeInitializeOnLoadMethod]`.
-- **Music / SFX** write the same PlayerPrefs keys `BootAudioManager` already reads
-  (`MusicVolume` 0.6, `UISfxVolume` 0.8), so no second settings system exists.
-- `BootAudioManager` lives only in `BootScene` and is not `DontDestroyOnLoad`, so those two sliders
-  have nothing to move while you are standing in the lobby. That is expected, not a bug.
+**Scenes:** `TutorialScene.unity` is **Zelda's, confirmed**. `LobbyMirrorScene.unity` is Raphael's
+and ships — don't hand-edit it, but **`WhoCastThat → Build Mirror Menu` is the sanctioned way to
+change the menu in it.** `zelda.unity` / `Tutorial.unity` are dead.
 
 ---
 
-## 3. ⚠️ OPEN — `MirrorMenuRouter` still overrides Play and How to Play
+## 4. ⚠️ `MirrorMenuRouter` — the position has CHANGED
 
-`MirrorMenuRouter.Start()` calls `RemoveAllListeners()` on Play, Host, Join and How to Play, then
-installs its own handlers. `Start()` runs after `Awake()`, so **the router wins**.
+The previous version of this file proposed disabling `LobbyFlow` so the mirror's own wiring would
+win. **Do not do that now.** With Host and Join restored, the router is the only thing that knows
+how to create or join a session — disabling it strips session handling from all three buttons and
+loads `InteractionTestScene` with no session at all.
 
-- **Settings, Quit and Back are untouched by the router and work today.**
-- **Play and How to Play still run Raphael's Quick Play flow**, not the handlers in §2.
+`MirrorMenuRouter.Start()` calls `RemoveAllListeners()` on Play, Host, Join and How to Play and
+installs its own, and `Start()` runs after `Awake()`, so the router wins. That is now the desired
+behaviour. Settings, Quit and Back are untouched by it and run `MagicMirrorMenu`'s handlers.
 
-To get the §2 behaviour, the `LobbyFlow` GameObject in `LobbyMirrorScene` must be disabled or
-removed — and that is Raphael's scene, so it is his call.
-
-**Know the consequence before doing it.** The router is what sets `LobbyIntent`, which is what tells
-`SessionIntentConnector` to create or join a session. Remove it and `InteractionTestScene` loads
-with **no network session at all** — which by §5 below is exactly the state where no potions are
-dealt. Play would reach a game scene that does not play. That may be acceptable if the tutorial and
-game go self-contained anyway, but it is a removal of the multiplayer lobby, not a button rewire.
+Keep the public `hostButton` / `joinButton` fields — the router reads them, and deleting them stops
+that file compiling for everyone.
 
 ---
 
-## 4. Build settings — the recurring merge conflict
+## 5. Pending / cleanup
 
-`ProjectSettings/EditorBuildSettings.asset` **must not be committed** (FOR_ZELDA §0a). It was
-committed anyway in `e8febd6 "menu"`, and immediately caused a merge conflict against `main`:
-both sides appended to the end of the scene list, `main` adding `InteractionTestScene` and this
-branch adding `LobbyMirrorScene` + `InteractionTestScene`. Same intent, conflicting text.
-
-Resolved by keeping this branch's list, which is the superset. The correct enabled order:
-
-```
-BootScene, LobbyScene, zelda, Tutorial, TutorialScene, LobbyMirrorScene, InteractionTestScene
-```
-
-**This will conflict again on every merge** while the file stays tracked. The permanent fix is to
-untrack it (`git rm --cached` + `.gitignore`), which needs Raphael's and Ye Kai's agreement because
-it affects their clones — a fresh clone would then start with an empty build list.
+- **Counterspell is only narrated for the local player.** The curse-defence branch
+  (`NetworkedSpellGame.cs:1649`) consumes the potion, calls `RemoveCurse` and goes straight to
+  placement — it raises **no event at all**. `SpellVoiceDirector` infers it from the local curse
+  flag clearing, screening out elimination. A rival's Counterspell needs a real event on that
+  shared file.
+- **`reflection (dispel).mp3` can never play.** `ApplyEffect` excludes Dispel from
+  `lastResolvedSpell`, so a Reflection cannot copy one. Not a wiring gap — leave it or change the
+  rule.
+- **`NetworkedSpellGame` nulls its static presentation events on despawn**, which silently
+  unsubscribes `GameAudioDirector` — the existing stings likely go quiet after the first match of a
+  session. `SpellVoiceDirector` re-arms on scene load and on a new game instance; `GameAudioDirector`
+  does not. Their file, worth telling them.
+- **Voice slot 11 is empty** — "Tutorial complete — you're ready to duel!" is silent. Slots are
+  assigned **file number → slot number**, so `step N.mp3` lands in element `N-1`.
+- **Remove `DiagnosticLoop()`** from `TutorialDriver`.
+- **`enableWordWrapping`** still deprecated in `TutorialController.cs:152`, `MirrorMenuRouter.cs:80`
+  and `RoomCodePad.cs:186`.
+- **Dead code:** `PotDrawZone.cs` + `PotionGameManager` are the old prototype. `CauldronDrawZone.cs`
+  is in **neither** scene — superseded by `StirZone`.
+- **`Setting linear/angular velocity of a kinematic body is not supported`** spams on every potion
+  spawn. Pre-existing, harmless, noisy.
+- **`Seat_2` (z −14.79) and `Seat_3` (z −13.24) sit outside the table** (z range ≈ −13.08…−10.28).
+  Fine for the solo tutorial, wrong for a 4-player match.
+- **`CauldronOrbit.tableCenter` may be null in `InteractionTestScene`** — if so the pot never orbits
+  in the real game either. Worth checking.
+- **Gabriola is a Windows system font.** Licensed for use *on* Windows; embedding it in an Android
+  APK is outside that. For distribution swap to an open font (IM Fell English, Cinzel Decorative,
+  MedievalSharp) — all the plumbing exists, it's one file drop.
 
 ### Git hygiene (FOR_ZELDA §5)
+Stage explicitly, **never `git add -A`**. Never commit `ProjectSettings/`.
+Correct enabled build order:
+`BootScene, LobbyScene, zelda, Tutorial, TutorialScene, LobbyMirrorScene, InteractionTestScene`.
 
-- Stage explicitly. **Never `git add -A`** — that is how the above happened.
-- Never commit `ProjectSettings/` or `Assets/Screenshots/`.
-- **A permanently "modified" scene is usually not your work.** Opening a scene lets TextMeshPro
-  recompute label widths straight back into the YAML. It regenerates every time. Do not commit it,
-  and do not go hunting for what you changed — you probably changed nothing.
-- Still outstanding: `Assets/Scenes/LobbyMirrorScene.unity` and `Assets/Scenes/zelda.unity` are in
-  this branch's history carrying **only** that TMP noise. Worth reverting out. `LobbyMirrorScene` is
-  Raphael's and scene YAML cannot be hand-merged once you both have real edits in it.
-
----
-
-## 5. OPEN — the tutorial still does not play
-
-Unchanged from the previous handoff, and still the biggest open piece.
-
-**Symptom:** potions sometimes do not spawn; when they do, dropping one in the ring returns it to
-the rack.
-
-**Diagnosis:** the config is correct. `NetworkedSpellGame` simply is not reliably `GameActive` for
-one player. `RejectPotion` fires when the game is not active, it is not your turn, or a spell is
-resolving — so a bounced cast is the authority rejecting it. No potions means no hand was dealt
-because `GameActive` was false when `StartGame` ran.
-
-**Root cause (FOR_ZELDA §2c):** entering the tutorial auto-creates and abandons a live Netcode
-session ("Player's Room") every run. Unity's lobby service **rate-limits after that churn**, so
-sessions stop being created — which looks exactly like a code regression. This matches the
-"works sometimes, then stops" flakiness.
-
-**Recommendation:** make the tutorial self-contained — no live network session, drive
-potions/cast/draw/curse locally. This also stops the tutorial from rate-limiting the real lobby for
-the whole team. The alternative means touching shared `NetworkedSpellGame.cs`, which violates team
-rule §5.1.
-
-**Ownership: `TutorialScene.unity` is Zelda's.** That question is settled and no longer blocks.
+**Three files go dirty on their own — do not commit them:**
+- `Assets/Fonts/Gabriola SDF.asset` — TMP re-baking its glyph atlas, thousands of lines.
+- `Assets/Prefabs/InteractionTest/NetworkedPotion.prefab` — `GlobalObjectIdHash` changes during
+  mass model reimports. Clients must agree on it, so it needs the netcode owner, not a drive-by commit.
+- `Assets/Scenes/New Lighting Settings.lighting` — Unity's stray default, superseded by
+  `LS_RoomV2_Quest.lighting`.
 
 ---
 
-## 6. Hard-won values (don't lose these)
+## 6. What we tried that FAILED (read before re-trying)
 
-| Thing | Value | Where |
-|---|---|---|
-| Player spawn (CharacterResetter offline+online) | `(-6.21, -1.0, -10.39)` | rig `XR Interaction Setup (MP Variant)` |
-| Seat / seated-lock anchor (`Seat_0`) | `(-5.65945, -2.147, -11.69185)`, rot y=180 | `TutorialScene` |
-| Play ring (`PlayZone`) | `(-4.58, -0.89, -11.69)` | `TutorialScene` |
-| Local seat rack (`seatRacks[0]`) | `testtube_stand (1)` | `SpellGameManager` |
-| Guide book sprite | `Assets/Textures/guide-removebg-preview.png` (Single sprite) | `TutorialDriver.bookBackground` |
+### 6a. "The tutorial doesn't work" was THREE bugs, not one
+1. **Solo win** — `CheckForWinner()` ended the game instantly → casts rejected, draws refused.
+2. **Lobby rate-limit** — session churn → no connection at all → no potions spawned *whatsoever*.
+3. **Unreachable cauldron** — `tableCenter` null → pot 2.9 m away → curse step could never fire.
 
-**Player spawns in the wrong place?** It is `CharacterResetter` on the rig teleporting to its
-`offlinePosition` on `Start`, not the transform. Setting the transform in-editor does nothing.
+**The previous handoff blamed the lobby for all of it. That was wrong.** Read the diagnostic before
+theorising.
 
-**"Invisible wall" reaching the chair?** Not a mystery collider — it was the old `(0,0,-12)` spawn
-forcing a walk into the `main table` collider. `rtchair (8)` is a child of `main table`, which has a
-large scale, so convert chair positions via `chair.parent.TransformPoint(local)` and keep the
-**floor Y**.
+### 6b. Offline host — topology mismatch (the subtle one)
+Setting `NetworkConfig.NetworkTransport = UnityTransport` is **not enough**. `NetworkTopology` was
+still `DistributedAuthority`, so the SDK logged `[Topology Mismatch]` and shut the NetworkManager
+down about a second after the hand was dealt.
+**Fix:** also set `nm.NetworkConfig.NetworkTopology = NetworkTopologyTypes.ClientServer`.
 
-**Guide-book image reverting to NULL?** The PNG imported as Sprite Mode = Multiple with no slices,
-so no Sprite sub-asset exists. Set `spriteImportMode = Single`, `SaveAndReimport`, then re-assign.
+### 6c. `gripPressed` silently matched nothing
+`<XRController>{LeftHand}/gripPressed` resolved to **zero controls** — it is `gripButton`. Bind by
+**usage** (`{GripButton}`). **Always check `action.controls.Count` at runtime.** Grip was dropped
+anyway: grip is also *grab*, so reaching for a potion threw the book open.
+
+### 6d. Watching only one cauldron
+There are **two pots**: `room/main table/pot/DrawTriggerZone` (static, on the table) and
+`CauldronRig/StirZone` (floating). The player reaches into the table one.
+
+### 6e. `StirZone.LocalHandCanDraw` is far stricter than it looks
+Pot settled, hand empty, cooldown elapsed, `CanBrew` true, **and** `OnTriggerEnter` fired for a
+collider it accepts. Any one failing stalls a `WaitUntil` forever with no error. Don't gate tutorial
+steps on it.
+
+### 6f. Mirror menu — wrong input module (not a device-vs-simulator issue)
+`LobbyMirrorScene`'s EventSystem carried `InputSystemUIInputModule`. XR interactors only drive UI
+through `XRUIInputModule`. Both end up on the EventSystem and the pre-existing one wins, so
+`currentInputModule as XRUIInputModule` returns null — rays hover, clicks do nothing.
+**Deterministic, not simulator-only.**
+
+### 6g. A transparent Image still eats UI raycasts
+Removing a panel background by setting alpha to 0 leaves an invisible slab swallowing every click
+meant for what is behind it. Either drop the `Image` component entirely or set
+`raycastTarget = false` with it.
+
+### 6h. Rotate BEFORE you measure
+`FitSize` and the base-seating calculation both read **world-space** bounds, and the hat mesh carries
+a baked 16° tilt, so its AABB is not rotation-invariant. Applying the yaw after measuring moves the
+geometry out from under numbers taken in the old orientation.
+
+### 6i. Layout constants copied into a second file go stale silently
+`LobbyCustomisePanel` placed its button at a literal `y=-590`, correct for a four-button menu and
+commented "Quit sits at y=-420". Both stopped being true two layouts ago. The menu now owns
+`RowPosition()` and attachments ask for the next row.
+
+### 6j. Assorted traps
+- **`.m4a` cannot be imported by Unity.** Convert to mp3/wav/ogg or clips silently don't exist.
+- **Renaming audio outside Unity breaks asset references** — rename in the Project window instead.
+- **Changing a C# default does NOT change an already-serialized value.** `PlayerHatLibrary.asset`
+  held `forwardOffset 0` and `widthMetres 0.496` while the C# defaults said `0.01` and `0.30`.
+  A **newly added** field does take its C# default, since it was never serialized before.
+- **`▸` (U+25B8) is not in LiberationSans** — use `→`, or set a font fallback.
+- **Overlay canvases are invisible in VR.** Must be `RenderMode.WorldSpace`.
+- **Editing a scene file on disk while Unity has it open** pops a modal that blocks the MCP bridge
+  until someone clicks it.
 
 ---
 
-## 7. Files owned here
+## 7. Hard-won values
 
-- `Assets/Scripts/MagicMirrorMenu.cs` — the menu and its editor builder. All menu work goes here.
-- `Assets/Scripts/GameAudioSettings.cs` — audio prefs (new).
-- `Assets/Scripts/XRUIInputModuleGuard.cs` — the VR UI fix (new).
-- `Assets/Scripts/Tutorial/TutorialDriver.cs` — the whole tutorial. **Still contains a temporary
-  `DiagnosticLoop()`** logging `[TUT-DIAG]` every 1.5 s — remove it once the tutorial is fixed.
-- `TutorialScene.unity` — Zelda's, confirmed.
+| Thing | Value |
+|---|---|
+| Player spawn (`CharacterResetter` offline+online) | `(-6.21, -1.0, -10.39)` |
+| `Seat_0` | `(-5.66, -2.15, -11.69)` |
+| `PlayZone` / table centre | `(-4.58, -0.89, -11.69)` |
+| Cauldron settle point (seat 0) | `(-5.13, -11.38)`, 0.62 m from the seat |
+| Table pot trigger | `(-4.25, -0.79, -11.66)` |
+| HUD | 1.5 m out, 0.4 m above eye; banner +300 units; book −380 / 450 forward |
+| Local rack | `testtube_stand (1)` |
+| Mirror face (`magik mirror` bounds) | 1.101 m wide (Z) × 1.876 m tall (Y), centre `(0.175, 0.715, -13.200)` |
+| Mirror menu canvas | 1000 × 1800 units, scale ≈ 0.000896 → 0.90 m × 1.61 m |
+| Menu rows | first y 470, step 150, size 700 × 120 |
+| Hat fit | yaw 180, height 0.074, forward 0.02, width 0.496 |
+| `PotionType` order | 0 Hex, 1 Tribute, 2 Dispel, 3 Foresight, 4 Warp, 5 Phase, 6 Reflection, 7 Counterspell, 8 Curse |
 
-**Do not edit:** `LobbyMirrorScene.unity` (Raphael's — the scene that actually ships),
-`Assets/Scripts/Flow/*` (Raphael's). `zelda.unity` and `Tutorial.unity` are dead and will be
-deleted; work there does not reach players.
-
-### Remaining cleanup
-
-`enableWordWrapping` is obsolete and is most of the compile noise. Fixed in `MagicMirrorMenu.cs`.
-Still present in `TutorialController.cs:152` and `Assets/Scripts/Tutorial/TutorialDriver.cs:488` —
-replace with `textWrappingMode` (`TextWrappingModes.Normal` / `.NoWrap`).
+**Player spawns in the wrong place?** It's `CharacterResetter` on the rig, not the transform.
 
 ---
 
 ## 8. Environment quirks
 
-- The Unity MCP bridge drops frequently; reconnect and re-verify the `WhoCastThat` instance.
-- Scene edits cannot be saved during Play mode — stop Play first.
-- Compiles and domain reloads are slow. Poll `isCompiling` and verify a new method or field by
-  reflection before assuming the code is live.
+- The Unity MCP bridge **drops frequently** — reconnect and re-verify the `WhoCastThat` instance.
+  Some `execute_code` calls fail with an empty error; just retry. A modal dialog in the Editor
+  blocks it completely.
+- Scene edits can't be saved during Play mode. Play-mode changes are discarded on stop.
+- Compiles are slow. Poll `isCompiling` and verify a new field/method by reflection before
+  assuming code is live.
+- A merge that touches `Assets/Models/*.fbx.meta` triggers a long reimport of every model.
