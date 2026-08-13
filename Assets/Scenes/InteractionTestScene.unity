@@ -19426,6 +19426,7 @@ Transform:
   - {fileID: 800761836}
   - {fileID: 541020282}
   - {fileID: 514971212}
+  - {fileID: 1206012949}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &793118674
@@ -21937,6 +21938,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   ShowTopMostFoldoutHeaderGroup: 1
   minPlayersToStart: 2
+  allowSoloPlay: 0
   networkedPotionPrefab: {fileID: 592917901370543573, guid: 09a56195bd3368046acc24a3002c6653,
     type: 3}
   seatRacks:
@@ -26107,6 +26109,85 @@ MeshFilter:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1206009433}
   m_Mesh: {fileID: -3931615388447386359, guid: 32a79b4421b69d846910a5e3cba0a569, type: 3}
+--- !u!1001 &1206012948
+PrefabInstance:
+  m_ObjectHideFlags: 0
+  serializedVersion: 2
+  m_Modification:
+    serializedVersion: 3
+    m_TransformParent: {fileID: 792915493}
+    m_Modifications:
+    - target: {fileID: 4768653190300152477, guid: 381d6312b74b31344b392a6174528d11,
+        type: 3}
+      propertyPath: m_LocalPosition.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 4768653190300152477, guid: 381d6312b74b31344b392a6174528d11,
+        type: 3}
+      propertyPath: m_LocalPosition.y
+      value: -0.0028
+      objectReference: {fileID: 0}
+    - target: {fileID: 4768653190300152477, guid: 381d6312b74b31344b392a6174528d11,
+        type: 3}
+      propertyPath: m_LocalPosition.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 4768653190300152477, guid: 381d6312b74b31344b392a6174528d11,
+        type: 3}
+      propertyPath: m_LocalRotation.w
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 4768653190300152477, guid: 381d6312b74b31344b392a6174528d11,
+        type: 3}
+      propertyPath: m_LocalRotation.x
+      value: -0
+      objectReference: {fileID: 0}
+    - target: {fileID: 4768653190300152477, guid: 381d6312b74b31344b392a6174528d11,
+        type: 3}
+      propertyPath: m_LocalRotation.y
+      value: -0
+      objectReference: {fileID: 0}
+    - target: {fileID: 4768653190300152477, guid: 381d6312b74b31344b392a6174528d11,
+        type: 3}
+      propertyPath: m_LocalRotation.z
+      value: -0
+      objectReference: {fileID: 0}
+    - target: {fileID: 4768653190300152477, guid: 381d6312b74b31344b392a6174528d11,
+        type: 3}
+      propertyPath: m_LocalEulerAnglesHint.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 4768653190300152477, guid: 381d6312b74b31344b392a6174528d11,
+        type: 3}
+      propertyPath: m_LocalEulerAnglesHint.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 4768653190300152477, guid: 381d6312b74b31344b392a6174528d11,
+        type: 3}
+      propertyPath: m_LocalEulerAnglesHint.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 6150351155631072547, guid: 381d6312b74b31344b392a6174528d11,
+        type: 3}
+      propertyPath: m_IsActive
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 8521674559026125361, guid: 381d6312b74b31344b392a6174528d11,
+        type: 3}
+      propertyPath: m_Name
+      value: CauldronVFX
+      objectReference: {fileID: 0}
+    m_RemovedComponents: []
+    m_RemovedGameObjects: []
+    m_AddedGameObjects: []
+    m_AddedComponents: []
+  m_SourcePrefab: {fileID: 100100000, guid: 381d6312b74b31344b392a6174528d11, type: 3}
+--- !u!4 &1206012949 stripped
+Transform:
+  m_CorrespondingSourceObject: {fileID: 4768653190300152477, guid: 381d6312b74b31344b392a6174528d11,
+    type: 3}
+  m_PrefabInstance: {fileID: 1206012948}
+  m_PrefabAsset: {fileID: 0}
 --- !u!1 &1206386801
 GameObject:
   m_ObjectHideFlags: 0
