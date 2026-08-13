@@ -42,6 +42,24 @@ public class MagicMirrorMenu : MonoBehaviour
     public Slider musicVolumeSlider;
     public Slider sfxVolumeSlider;
 
+    // ---- Main-menu row layout -------------------------------------------------------------
+    // Public, and deliberately OUTSIDE the editor-only region below, because components that
+    // attach to this menu at runtime add rows to the same column. LobbyCustomisePanel used to
+    // carry its own copy of these numbers ("Quit sits at y=-420"), which stopped being true the
+    // moment this layout changed and left its button floating in a gap.
+    public const float RowFirstY = 470f;
+    public const float RowStep = 150f;
+    public static readonly Vector2 RowSize = new Vector2(700f, 120f);
+
+    /// <summary>Rows this menu lays down itself. Anything attaching later starts at this index.</summary>
+    public const int BuiltInRowCount = 6;
+
+    /// <summary>Anchored position of main-menu row <paramref name="index"/>, counting from zero.</summary>
+    public static Vector2 RowPosition(int index)
+    {
+        return new Vector2(0f, RowFirstY - index * RowStep);
+    }
+
     void Awake()
     {
         Wire(playButton, OnPlay);
@@ -117,7 +135,17 @@ public class MagicMirrorMenu : MonoBehaviour
     const string MenuFontPath = "Assets/Fonts/Gabriola SDF.asset";
     static TMP_FontAsset s_MenuFont;
 
-    static readonly Color PanelBg   = new Color(0.05f, 0.02f, 0.12f, 0.88f);
+    // Canvas resolution in UI units. Kept at 1000x1800 deliberately: LobbySettingsPanel and
+    // LobbyCustomisePanel both position their contents with literal coordinates in this space
+    // (the Customise row sits at y=-590), so changing these numbers silently moves their layouts.
+    // The menu is fitted to the mirror by SCALE, below, not by resizing the canvas.
+    const float CanvasWidth  = 1000f;
+    const float CanvasHeight = 1800f;
+
+    // Fraction of the mirror's face the menu is allowed to cover. The mirror's bounds include its
+    // carved frame, so filling them edge to edge puts the outermost buttons on the woodwork.
+    const float FrameInset = 0.86f;
+
     static readonly Color Accent     = new Color(0.72f, 0.45f, 1f, 1f);
     static readonly Color BtnNormal  = new Color(0.24f, 0.11f, 0.44f, 0.92f);
     static readonly Color BtnHi      = new Color(0.52f, 0.30f, 0.88f, 1f);
@@ -141,6 +169,22 @@ public class MagicMirrorMenu : MonoBehaviour
         Vector3 pos = faceCenter - viewDir * 0.05f;            // 5cm in front of the glass
         Quaternion rot = Quaternion.LookRotation(viewDir, Vector3.up);
 
+        // Fit the menu to the glass by MEASURING it. The mirror faces along X, so its face is the
+        // Y-Z plane: height is bounds.size.y and width is bounds.size.z. Hard-coding the scale is
+        // what let the canvas grow to 1.17m x 2.11m against a 1.10m x 1.88m mirror -- every edge
+        // of the menu hung off the frame into the room behind it.
+        float faceWidth  = 1.0f;
+        float faceHeight = 1.8f;
+        if (mr != null)
+        {
+            faceWidth  = mr.bounds.size.z * FrameInset;
+            faceHeight = mr.bounds.size.y * FrameInset;
+        }
+
+        // One uniform scale, taken from whichever axis runs out first, so the menu keeps its
+        // proportions instead of stretching to the mirror's.
+        float fitScale = Mathf.Min(faceWidth / CanvasWidth, faceHeight / CanvasHeight);
+
         var old = GameObject.Find("MirrorMenu");
         if (old != null) Undo.DestroyObjectImmediate(old);
 
@@ -155,36 +199,40 @@ public class MagicMirrorMenu : MonoBehaviour
         // over UI input in VR (it wants a screen/event camera), so the menu uses only the XR raycaster.
         AddXRRaycaster(root);
         var rrt = root.GetComponent<RectTransform>();
-        rrt.sizeDelta = new Vector2(1000f, 1800f);
-        root.transform.localScale = Vector3.one * 0.001f;      // 1000px -> 1.0m wide, 1800px -> 1.8m tall
+        rrt.sizeDelta = new Vector2(CanvasWidth, CanvasHeight);
+        root.transform.localScale = Vector3.one * fitScale;
 
         var menu = root.AddComponent<MagicMirrorMenu>();
 
         // Main panel --------------------------------------------------------
-        var main = Panel("MainPanel", rrt, PanelBg);
+        // No background image: the mirror's own glass is the backdrop. A filled panel over it read
+        // as a purple slab hung in front of the mirror rather than as something IN it.
+        var main = Container("MainPanel", rrt);
         Stretch(main.GetComponent<RectTransform>());
 
         Label("Title", main.transform, "WHO CAST THAT?", 82, Accent, new Vector2(0, 720), new Vector2(940, 160), FontStyles.Bold);
         Label("Subtitle", main.transform, "A Magical Duel of Potions", 34, TextCol, new Vector2(0, 620), new Vector2(940, 70), FontStyles.Italic);
 
-        // Host and Join are deliberately absent: the mirror sends the player straight into a scene.
-        string[] labels = { "Play", "How to Play", "Settings", "Quit" };
-        float y = 400f, step = 180f;
+        // Play, Host and Join all reach the real multiplayer flow through MirrorMenuRouter, which
+        // replaces the stub handlers below with its own in Start(). Host and Join were previously
+        // omitted and their fields left null, which made the router's OnHost/OnJoin -- and the
+        // whole RoomCodePad behind Join -- unreachable: the code existed with no way to press it.
+        string[] labels = { "Play", "Host", "Join", "How to Play", "Settings", "Quit" };
         var buttons = new Button[labels.Length];
         for (int i = 0; i < labels.Length; i++)
-            buttons[i] = MakeButton(labels[i], main.transform, new Vector2(0, y - i * step), new Vector2(700, 140));
+            buttons[i] = MakeButton(labels[i], main.transform, RowPosition(i), RowSize);
 
         menu.mainPanel      = main;
         menu.playButton     = buttons[0];
-        menu.howToButton    = buttons[1];
-        menu.settingsButton = buttons[2];
-        menu.quitButton     = buttons[3];
-        menu.hostButton     = null;   // see the field comments: kept for MirrorMenuRouter, left unassigned
-        menu.joinButton     = null;
+        menu.hostButton     = buttons[1];
+        menu.joinButton     = buttons[2];
+        menu.howToButton    = buttons[3];
+        menu.settingsButton = buttons[4];
+        menu.quitButton     = buttons[5];
 
         // Settings panel ----------------------------------------------------
         // A sibling of MainPanel that swaps places with it, so the mirror never shows both.
-        var settings = Panel("SettingsPanel", rrt, PanelBg);
+        var settings = Container("SettingsPanel", rrt);
         Stretch(settings.GetComponent<RectTransform>());
         menu.settingsPanel = settings;
 
@@ -222,6 +270,19 @@ public class MagicMirrorMenu : MonoBehaviour
         var so = new UnityEditor.SerializedObject(comp);
         var mask = so.FindProperty("m_BlockingMask");
         if (mask != null) { mask.intValue = 0; so.ApplyModifiedPropertiesWithoutUndo(); }
+    }
+
+    /// <summary>
+    /// A layout-only panel: a RectTransform with no Image behind it. Used for the full-bleed
+    /// panels, which exist to group and to be switched on and off, never to be seen. Deliberately
+    /// has no Graphic at all rather than a transparent one — an Image with alpha 0 still swallows
+    /// UI raycasts, so an invisible panel would quietly eat clicks meant for the mirror.
+    /// </summary>
+    static GameObject Container(string name, Transform parent)
+    {
+        var go = new GameObject(name, typeof(RectTransform));
+        go.transform.SetParent(parent, false);
+        return go;
     }
 
     static GameObject Panel(string name, Transform parent, Color color)

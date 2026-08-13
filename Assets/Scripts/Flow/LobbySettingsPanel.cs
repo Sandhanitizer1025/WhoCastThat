@@ -62,7 +62,6 @@ namespace WhoCastThat.Flow
 
         // Lifted from MagicMirrorMenu's editor builder so the runtime panel and an editor-built
         // one are the same menu, not two that merely coexist.
-        private static readonly Color PanelBg = new(0.05f, 0.02f, 0.12f, 0.88f);
         private static readonly Color Accent = new(0.72f, 0.45f, 1f, 1f);
         private static readonly Color BtnNormal = new(0.24f, 0.11f, 0.44f, 0.92f);
         private static readonly Color BtnHi = new(0.52f, 0.30f, 0.88f, 1f);
@@ -124,7 +123,11 @@ namespace WhoCastThat.Flow
 
         private GameObject BuildPanel(RectTransform root, MagicMirrorMenu menu)
         {
-            GameObject panel = Panel("SettingsPanel", root, PanelBg);
+            // No backdrop: the mirror's glass is the background. raycastTarget goes off with it —
+            // a fully transparent Image still swallows UI raycasts, so an invisible slab across the
+            // whole menu would eat clicks meant for what is behind it.
+            GameObject panel = Panel("SettingsPanel", root, Color.clear);
+            panel.GetComponent<Image>().raycastTarget = false;
             Stretch((RectTransform)panel.transform);
 
             Label("SettingsTitle", panel.transform, "SETTINGS", 72f, Accent,

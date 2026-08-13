@@ -23,7 +23,6 @@ namespace WhoCastThat.Flow
     {
         private const string LobbySceneName = "LobbyMirrorScene";
 
-        private static readonly Color PanelBg = new(0.05f, 0.02f, 0.12f, 0.88f);
         private static readonly Color Accent = new(0.72f, 0.45f, 1f, 1f);
         private static readonly Color TextCol = new(0.95f, 0.92f, 1f, 1f);
         private static readonly Color BtnNormal = new(0.24f, 0.11f, 0.44f, 0.92f);
@@ -34,6 +33,12 @@ namespace WhoCastThat.Flow
         private static readonly Vector3 StageOrigin = new(0f, -500f, 0f);
 
         private const float PreviewSpinDegreesPerSecond = 24f;
+
+        // The mannequin is turned to face the camera. Named rather than written twice, because the
+        // HAT MOUNT has to turn with it: the mount is a sibling of the head under the stage, not a
+        // child of it, so at identity the hat kept facing the way the head was NOT — the player was
+        // shown their own face wearing a backwards hat.
+        private const float PreviewHeadYaw = 180f;
 
         private PlayerHatLibrary library;
         private TMP_FontAsset menuFont;
@@ -167,7 +172,7 @@ namespace WhoCastThat.Flow
                 // Turned to face the camera. The avatar's forward is +Z and the camera looks along
                 // +Z from behind it, so at identity the player is introduced to the back of their
                 // own head.
-                copy.transform.localRotation = Quaternion.Euler(0f, 180f, 0f);
+                copy.transform.localRotation = Quaternion.Euler(0f, PreviewHeadYaw, 0f);
 
                 // Instantiating out of the rig drops the parent's scale, so the mannequin would
                 // come out 10% smaller than the head the player actually wears.
@@ -178,8 +183,12 @@ namespace WhoCastThat.Flow
                 MeasureFace(copy);
             }
 
+            // Turned with the head, so "forward" means the same thing for the hat as it does for
+            // the face. Everything PlayerHat does at runtime is expressed relative to the head, and
+            // this mount is what stands in for the head here.
             hatMount = new GameObject("HatMount").transform;
             hatMount.SetParent(stage, false);
+            hatMount.localRotation = Quaternion.Euler(0f, PreviewHeadYaw, 0f);
 
             // Deliberately NOT parented to the stage. Riding the stage, the light turned away with
             // the head and left whichever side was facing the camera in near-darkness — the face
@@ -320,17 +329,24 @@ namespace WhoCastThat.Flow
 
         private void AddCustomiseButton(RectTransform main)
         {
-            // Quit sits at y=-420 and the panel runs to -900, so there is room for one more row
-            // at the established 170 spacing without touching the existing layout.
-            Button button = MakeButton(main, "Customise", new Vector2(0f, -590f), new Vector2(700f, 140f));
+            // Asked for rather than hardcoded. The previous literal y=-590 was measured against a
+            // four-button menu; once Host and Join came back it sat in the middle of the column.
+            Button button = MakeButton(main, "Customise",
+                                       MagicMirrorMenu.RowPosition(MagicMirrorMenu.BuiltInRowCount),
+                                       MagicMirrorMenu.RowSize);
             button.onClick.AddListener(Open);
         }
 
         private void BuildPanel(RectTransform menuRect)
         {
+            // No backdrop: the mirror's glass is the background, matching the main and settings
+            // panels. raycastTarget goes off with it — a transparent Image still swallows UI
+            // raycasts, and this one covers the whole menu.
             var go = new GameObject("CustomisePanel", typeof(RectTransform), typeof(Image));
             go.transform.SetParent(menuRect, false);
-            go.GetComponent<Image>().color = PanelBg;
+            var backdrop = go.GetComponent<Image>();
+            backdrop.color = Color.clear;
+            backdrop.raycastTarget = false;
             panel = go;
 
             var rt = (RectTransform)go.transform;
@@ -510,7 +526,9 @@ namespace WhoCastThat.Flow
         /// </summary>
         private void FitPreviewHat(GameObject hat)
         {
-            hat.transform.localRotation = Quaternion.identity;
+            // Same rotation the worn hat gets, and applied before anything is measured for the same
+            // reason: the mesh is tilted, so its bounds are not rotation-invariant.
+            hat.transform.localRotation = library.FitRotation;
             hat.transform.localScale = Vector3.one;
 
             Renderer[] rs = hat.GetComponentsInChildren<Renderer>(true);
@@ -537,8 +555,12 @@ namespace WhoCastThat.Flow
 
             // Measured from the EYES, exactly as PlayerHat does at runtime -- the mannequin's own
             // pivot is at the neck, so the runtime offset alone would seat the hat on its throat.
-            hat.transform.localPosition =
-                new Vector3(0f, previewEyeHeight + library.HeightOffset + baseBelowPivot, 0f);
+            // ForwardOffset was previously dropped here, which meant the preview quietly showed a
+            // different fit from the one the player wore into the match.
+            hat.transform.localPosition = new Vector3(
+                0f,
+                previewEyeHeight + library.HeightOffset + baseBelowPivot,
+                library.ForwardOffset);
         }
 
         // ---- widgets ----
